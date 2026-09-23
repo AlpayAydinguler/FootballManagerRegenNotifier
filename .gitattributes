@@ -1,0 +1,15 @@
+* text=auto eol=lf
+
+*.sln        text eol=crlf
+*.csproj     text eol=crlf
+*.props      text eol=crlf
+*.targets    text eol=crlf
+*.manifest   text eol=crlf
+*.cs         text eol=crlf
+*.xaml       text eol=crlf
+
+*.xlsx       binary
+*.traineddata binary
+*.png        binary
+*.ico        binary
+*.gif        binary
