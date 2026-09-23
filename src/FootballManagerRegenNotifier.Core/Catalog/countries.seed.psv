@@ -1,0 +1,104 @@
+﻿# FM Regen Notifier - seed youth intake dataset
+#
+# Pipe-delimited so that Notes may contain commas and semicolons freely.
+# Lines beginning with '#' and blank lines are ignored.
+#
+# This is the SEED only. It is written to data/countries.xlsx on first run and
+# the spreadsheet is the source of truth from then on, so editing it for FM27 or
+# for an older edition never means touching the application.
+#
+# Provenance and licensing: see data/LICENSE-DATA.md. The dates are FM24-era and
+# unverified against FM26. Treat Confidence as real information, not decoration.
+#
+Code|Country|Continent|YouthRating|StartMonth|StartDay|EndMonth|EndDay|Confidence|EnabledByDefault|Notes
+AUT|Austria|Europe|79|3|3|3|7|High|false|
+ALB|Albania|Europe|65|4|8|4|29|Medium|false|Not playable in FM26; inactive-nation date cluster
+AND|Andorra|Europe|36|4|8|4|20|Medium|false|Not playable in FM26; inactive-nation date cluster
+AZE|Azerbaijan|Europe|43|4|8|4|27|Medium|false|Not playable in FM26; inactive-nation date cluster
+BLR|Belarus|Europe|62|10|5|10|31|High|false|
+BEL|Belgium|Europe|120|3|19|4|16|High|false|
+BIH|Bosnia and Herzegovina|Europe|78|4|8|4|30|Medium|false|Not playable in FM26; inactive-nation date cluster
+BUL|Bulgaria|Europe|72|3|7|4|16|High|false|
+CRO|Croatia|Europe|98|3|9|3|20|High|false|
+CZE|Czechia|Europe|94|3|19|4|10|High|false|FM26 may label this Czech Republic
+CYP|Cyprus|Europe|74|4|8|4|30|Medium|false|Not playable in FM26; inactive-nation date cluster
+DEN|Denmark|Europe|91|3|19|3|31|High|false|
+ENG|England|Europe|135|3|14|3|31|High|true|
+FIN|Finland|Europe|75|9|3|9|10|High|false|Summer-calendar league; autumn intake
+FRO|Faroe Islands|Europe|42|9|21|9|30|Medium|false|Not playable in FM26; inactive-nation date cluster
+FRA|France|Europe|155|3|9|3|24|High|true|
+GER|Germany|Europe|155|3|9|3|31|High|true|
+GRE|Greece|Europe|94|3|9|3|10|High|false|
+GIB|Gibraltar|Europe|35|3|9|3|21|High|false|Source wrote 9/3 unpadded; value unambiguous
+NED|Netherlands|Europe|132|3|26|3|31|High|true|Source says Holland; FM26 name is Netherlands
+HUN|Hungary|Europe|68|3|9|3|14|High|false|
+ISL|Iceland|Europe|67|8|29|9|26|High|false|Summer-calendar league; autumn intake
+IRL|Republic of Ireland|Europe|83|9|22|9|30|High|false|Summer-calendar league; autumn intake
+ISR|Israel|Europe|84|3|9|3|27|High|false|UEFA nation; grouped under Europe as FM does
+ITA|Italy|Europe|144|3|19|3|31|High|true|
+KVX|Kosovo|Europe|60|4|8|4|30|Medium|false|Not playable in FM26; inactive-nation date cluster
+LVA|Latvia|Europe|63|9|21|9|30|High|false|Value equals inactive cluster despite being playable
+LTU|Lithuania|Europe|59|9|21|9|30|Low|false|Newly playable in FM26; listed value is the inactive cluster and is probably stale
+LUX|Luxembourg|Europe|35|4|8|4|30|Medium|false|Not playable in FM26; inactive-nation date cluster
+MLT|Malta|Europe|42|4|8|4|27|Medium|false|Not playable in FM26; inactive-nation date cluster
+MNE|Montenegro|Europe|60|4|8|4|30|Medium|false|Not playable in FM26; inactive-nation date cluster
+NIR|Northern Ireland|Europe|79|3|14|3|30|High|false|
+MKD|North Macedonia|Europe|71|4|8|4|30|Medium|false|Not playable in FM26; inactive-nation date cluster
+NOR|Norway|Europe|82|2|6|2|15|High|false|Earliest window in the dataset
+POL|Poland|Europe|94|3|17|3|31|High|false|
+POR|Portugal|Europe|134|3|19|3|31|High|true|
+ROU|Romania|Europe|91|3|19|3|27|High|false|
+RUS|Russia|Europe|118|3|1|3|28|High|false|Sits with the European March group, not the autumn group
+SMR|San Marino|Europe|29|4|6|4|23|Medium|false|Not playable in FM26
+SCO|Scotland|Europe|83|3|14|3|23|High|false|
+SRB|Serbia|Europe|100|3|5|3|16|High|false|
+SVK|Slovakia|Europe|79|3|18|3|31|High|false|
+SVN|Slovenia|Europe|78|3|20|3|24|High|false|
+ESP|Spain|Europe|145|3|29|4|26|High|true|
+SWE|Sweden|Europe|88|9|14|10|12|High|false|Summer-calendar league; autumn intake
+SUI|Switzerland|Europe|90|3|19|3|22|High|false|
+TUR|Türkiye|Europe|124|3|9|3|18|High|false|
+UKR|Ukraine|Europe|110|3|16|3|31|High|false|
+WAL|Wales|Europe|71|3|14|3|19|High|false|
+ARG|Argentina|South America|140|4|27|4|30|High|true|
+BOL|Bolivia|South America|59|9|21|9|30|Medium|false|Not playable in FM26; matches inactive cluster
+BRA|Brazil|South America|163|9|22|10|20|High|true|Longest window in the dataset
+CHI|Chile|South America|93|9|21|10|19|High|false|
+COL|Colombia|South America|117|1|17|1|31|High|false|January window
+ECU|Ecuador|South America|94|9|22|10|19|Medium|false|Not playable in FM26
+PAR|Paraguay|South America|90|9|24|9|25|Medium|false|Not playable in FM26
+PER|Peru|South America|97|9|28|10|3|High|false|
+URU|Uruguay|South America|90|1|18|2|15|High|false|January window
+VEN|Venezuela|South America|71|9|21|10|19|Medium|false|Not playable in FM26
+CAN|Canada|North America|54|9|21|9|21|Medium|false|Single-day window reported; playable nation so the window end is suspect
+CRC|Costa Rica|North America|66|4|8|4|21|Medium|false|Not playable in FM26; source wrote 8/4 unpadded
+MEX|Mexico|North America|120|2|28|3|2|High|false|Window spans 29 February in leap years
+USA|United States|North America|110|9|21|9|23|High|false|
+RSA|South Africa|Africa|95|4|3|4|5|High|false|Only FM26-playable African nation with a distinct window
+ALG|Algeria|Africa|102|4|8|4|8|Medium|false|Source misspelled this as Algerie; inactive-nation date cluster
+EGY|Egypt|Africa|125|4|8|4|8|Low|false|Newly playable in FM26; listed value is the inactive cluster and is probably stale
+CIV|Ivory Coast|Africa|105|4|8|4|11|Medium|false|Inactive-nation date cluster
+KEN|Kenya|Africa|55|4|8|4|8|Medium|false|Inactive-nation date cluster
+SEN|Senegal|Africa|80|4|8|4|11|Medium|false|Inactive-nation date cluster
+AUS|Australia|Oceania|90|10|4|10|4|Medium|false|Single-day window reported; playable nation so the window end is suspect
+NZL|New Zealand|Oceania|88|4|8|4|8|Medium|false|Inactive-nation date cluster
+CHN|China|Asia|60|10|5|10|5|Medium|false|Single-day window reported; playable nation so the window end is suspect
+IND|India|Asia|86|4|18|4|18|Medium|false|Single-day window reported; playable nation so the window end is suspect
+IDN|Indonesia|Asia|56|7|4|7|4|Medium|false|Single-day window reported; the only July window in the dataset
+JPN|Japan|Asia|112|10|5|10|31|High|false|Summer-calendar league; autumn intake
+KOR|South Korea|Asia|110|9|15|9|15|Medium|false|Single-day window reported; playable nation so the window end is suspect
+AFG|Afghanistan|Asia|19|9|21|9|22|Low|false|Source is ambiguous; it literally reads 21/09 or 22/09
+IRN|Iran|Asia|110|4|8|4|8|Medium|false|Inactive-nation date cluster
+IRQ|Iraq|Asia|103|4|8|4|9|Medium|false|Inactive-nation date cluster
+QAT|Qatar|Asia|105|4|8|4|8|Medium|false|Inactive-nation date cluster
+KSA|Saudi Arabia|Asia|105|3|9|3|9|Medium|false|Single-day; does not match the inactive cluster
+BRA-LL|Brazil (Lower Leagues)|South America|163|1|2|1|2|Medium|false|Separate lower-league intake
+DEN-LL|Denmark (Lower Leagues)|Europe|91|6|30|6|30|Medium|false|Separate lower-league intake
+GER-LL|Germany (Lower Leagues)|Europe|155|6|20|6|20|Medium|false|Separate lower-league intake
+POR-LL|Portugal (Lower Leagues)|Europe|134|6|30|6|30|Medium|false|Separate lower-league intake
+RUS-LL|Russia (Lower Leagues)|Europe|118|6|20|6|20|Medium|false|Separate lower-league intake
+SRB-LL|Serbia (Lower Leagues)|Europe|100|6|16|6|16|Medium|false|Separate lower-league intake
+ESP-LL|Spain (Lower Leagues)|Europe|145|7|10|7|10|Medium|false|Separate lower-league intake
+SWE-LL|Sweden (Lower Leagues)|Europe|88|12|25|12|25|Medium|false|Separate lower-league intake; latest date in the dataset
+TUR-LL|Türkiye (Lower Leagues)|Europe|124|6|20|6|20|Medium|false|Source listed this as Turkey; same nation as the TUR row
+URU-LL|Uruguay (Lower Leagues)|South America|90|1|1|1|1|Medium|false|Separate lower-league intake; earliest date in the dataset

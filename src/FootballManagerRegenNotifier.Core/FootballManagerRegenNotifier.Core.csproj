@@ -19,6 +19,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Catalog\countries.seed.psv" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="FootballManagerRegenNotifier.Core.Tests" />
   </ItemGroup>
 

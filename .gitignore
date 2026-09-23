@@ -60,3 +60,6 @@ samples/local/
 
 ## Tesseract language data is intentionally COMMITTED (see tessdata/README.md).
 ## Do not add tessdata/ here.
+
+# Generated on first run from the embedded seed (see data/README.md).
+data/countries.xlsx
