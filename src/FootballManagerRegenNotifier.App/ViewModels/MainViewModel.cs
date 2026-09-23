@@ -152,6 +152,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _alertBringToFront;
     [ObservableProperty] private bool _alertTrayBalloon = true;
     [ObservableProperty] private bool _minimiseToTray = true;
+    [ObservableProperty] private bool _startMonitoringOnLaunch;
 
     public string SelectedSummary =>
         $"{Countries.Count(c => c.IsSelected)} of {Countries.Count} selected";
@@ -202,6 +203,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Log.Add(LogSeverity.Info, "Ready. Calibrate the region, tick some countries, then press Start.");
         UpdateNextIntake();
         RequestPreview();
+
+        if (StartMonitoringOnLaunch && StartCommand.CanExecute(null)) StartCommand.Execute(null);
     }
 
     private void LoadCountries(string catalogPath, AppSettings settings)
@@ -319,6 +322,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         AlertBringToFront = AlertBringToFront,
         AlertTrayBalloon = AlertTrayBalloon,
         MinimiseToTray = MinimiseToTray,
+        StartMonitoringOnLaunch = StartMonitoringOnLaunch,
     };
 
     private void ApplySettings(AppSettings s)
@@ -354,6 +358,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         AlertBringToFront = s.AlertBringToFront;
         AlertTrayBalloon = s.AlertTrayBalloon;
         MinimiseToTray = s.MinimiseToTray;
+        StartMonitoringOnLaunch = s.StartMonitoringOnLaunch;
 
         _suppressPersist = false;
     }

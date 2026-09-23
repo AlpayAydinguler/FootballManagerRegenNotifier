@@ -30,7 +30,7 @@ public partial class App : System.Windows.Application
         // while Football Manager is in the foreground, precisely so this file
         // cannot accumulate whatever else happened to be on screen.
         Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Information()
+            .MinimumLevel.Debug()
             .WriteTo.File(
                 Path.Combine(LogDirectory, "fmrn-.log"),
                 rollingInterval: RollingInterval.Day,

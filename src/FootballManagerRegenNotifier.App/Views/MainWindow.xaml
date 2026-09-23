@@ -473,6 +473,8 @@
 
                             <TextBlock Text="WINDOW" Style="{StaticResource SectionHeader}" Margin="0,24,0,10" />
                             <CheckBox Content="Minimise to the notification area" IsChecked="{Binding MinimiseToTray}" />
+                            <CheckBox Content="Start monitoring as soon as the app opens"
+                                      IsChecked="{Binding StartMonitoringOnLaunch}" IsEnabled="{Binding IsIdle}" />
 
                             <TextBlock Text="COUNTRY LIST" Style="{StaticResource SectionHeader}" Margin="0,24,0,10" />
                             <CheckBox Content="Include lower-league rows in 'Select top tier'"

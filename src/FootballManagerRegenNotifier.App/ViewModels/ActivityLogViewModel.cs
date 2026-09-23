@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Serilog.Events;
 
 namespace FootballManagerRegenNotifier.App.ViewModels;
 
@@ -57,6 +58,18 @@ public sealed partial class ActivityLogViewModel : ObservableObject
 
     public void Add(LogSeverity severity, string message)
     {
+        // Mirror to the rolling file before the verbosity filter, so a user can
+        // send a log that explains a problem they only noticed afterwards.
+        // Everything reaching here is either a startup message or a tracker event
+        // from a gated sample, so no ungated screen text is written to disk.
+        Serilog.Log.Write(severity switch
+        {
+            LogSeverity.Error => LogEventLevel.Error,
+            LogSeverity.Warning => LogEventLevel.Warning,
+            LogSeverity.Detail => LogEventLevel.Debug,
+            _ => LogEventLevel.Information,
+        }, "{Message}", message);
+
         if (severity == LogSeverity.Detail && !ShowDetail) return;
 
         Entries.Add(new LogEntry(DateTime.Now, severity, message));
