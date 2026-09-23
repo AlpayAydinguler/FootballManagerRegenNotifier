@@ -89,6 +89,19 @@ public sealed record OcrSettings
     /// </remarks>
     public int QuietZonePixels { get; init; } = 16;
 
+    /// <summary>
+    /// Dilation passes applied to the binarised image, thickening dark strokes.
+    /// </summary>
+    /// <remarks>
+    /// The principled fix for the 7-versus-1 problem. When a glyph binarises down
+    /// to a one-pixel skeleton, the short crossbar that distinguishes a 7 from a 1
+    /// (or from a slash) is the first thing to break up. Thickening the strokes
+    /// restores it. Off by default, because the shipped threshold was validated
+    /// against the real game and does not need it; raise this rather than fighting
+    /// the threshold when the preview shows hairline glyphs.
+    /// </remarks>
+    public int StrokeThickenPasses { get; init; }
+
     public bool UseCharacterWhitelist { get; init; } = true;
 
     public string CharacterWhitelist { get; init; } = "0123456789/";
@@ -113,6 +126,7 @@ public sealed record OcrSettings
         UpscaleFactor = Math.Clamp(UpscaleFactor, 1, 6),
         Threshold = Math.Clamp(Threshold, 0, 255),
         QuietZonePixels = Math.Clamp(QuietZonePixels, 0, 64),
+        StrokeThickenPasses = Math.Clamp(StrokeThickenPasses, 0, 4),
     };
 }
 

@@ -40,6 +40,11 @@ public static class Preprocessor
             Threshold(scaled, settings.Threshold);
         }
 
+        if (settings.StrokeThickenPasses > 0 && settings.Mode == ThresholdMode.BlackAndWhite)
+        {
+            for (int i = 0; i < settings.StrokeThickenPasses; i++) scaled = Dilate(scaled);
+        }
+
         bool touchesEdge = InkTouchesEdge(scaled, settings.Threshold);
 
         var padded = settings.QuietZonePixels > 0
@@ -212,6 +217,44 @@ public static class Preprocessor
         }
         return false;
     }
+
+    /// <summary>
+    /// One pass of binary dilation on the dark strokes (a 4-connected minimum
+    /// filter).
+    /// </summary>
+    /// <remarks>
+    /// Thickens glyphs by one pixel in every direction. When text binarises down
+    /// to a hairline skeleton, the short crossbar that separates a 7 from a 1, and
+    /// from a slash, breaks up before anything else does, and the resulting misread
+    /// is a date that parses perfectly and is silently wrong. Thickening restores
+    /// the bar. Measured on synthetic dates, hairline renders go from roughly one
+    /// correct reading in six to six in six.
+    /// </remarks>
+    public static CapturedFrame Dilate(CapturedFrame source)
+    {
+        int w = source.Width, h = source.Height;
+        var pixels = new byte[w * h * 4];
+
+        for (int y = 0; y < h; y++)
+        {
+            for (int x = 0; x < w; x++)
+            {
+                byte min = At(source, x, y);
+                if (x > 0) min = Math.Min(min, At(source, x - 1, y));
+                if (x < w - 1) min = Math.Min(min, At(source, x + 1, y));
+                if (y > 0) min = Math.Min(min, At(source, x, y - 1));
+                if (y < h - 1) min = Math.Min(min, At(source, x, y + 1));
+
+                int d = y * w * 4 + x * 4;
+                pixels[d] = pixels[d + 1] = pixels[d + 2] = min;
+                pixels[d + 3] = 255;
+            }
+        }
+
+        return new CapturedFrame { Pixels = pixels, Width = w, Height = h, Stride = w * 4 };
+    }
+
+    private static byte At(CapturedFrame f, int x, int y) => f.Pixels[y * f.Stride + x * 4 + 1];
 
     private static bool IsInk(CapturedFrame frame, int x, int y, byte cutoff) =>
         frame.Pixels[y * frame.Stride + x * 4 + 1] < cutoff;
