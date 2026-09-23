@@ -1,6 +1,7 @@
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Drawing.Text;
+using System.Globalization;
 using System.Text;
 using FootballManagerRegenNotifier.Capture.Ocr;
 using FootballManagerRegenNotifier.Capture.Preprocess;
@@ -117,8 +118,8 @@ public class OcrDiagnostics(ITestOutputHelper output)
 
             string config = $"{(legacy ? "legacy" : "lstm")} psm={psm} wl={whitelist} num={numeric}";
             scores.Add((config, correct, confSum / Samples.Length));
-            report.AppendLine($"{correct}/{Samples.Length}  conf={confSum / Samples.Length:F2}  {config}");
-            if (details.Count > 0) report.AppendLine("       " + string.Join("  ", details));
+            report.AppendLine(CultureInfo.InvariantCulture, $"{correct}/{Samples.Length}  conf={confSum / Samples.Length:F2}  {config}");
+            if (details.Count > 0) report.AppendLine(CultureInfo.InvariantCulture, $"       {string.Join("  ", details)}");
         }
 
         output.WriteLine("=== ENGINE / MODE SWEEP (145x35, Segoe UI 15px, 4x upscale) ===");
