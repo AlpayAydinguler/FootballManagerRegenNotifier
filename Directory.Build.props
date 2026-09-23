@@ -1,0 +1,37 @@
+<Project>
+
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <AccelerateBuildsInVisualStudio>true</AccelerateBuildsInVisualStudio>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Product>FM Regen Notifier</Product>
+    <Company>AlpayAydinguler</Company>
+    <Authors>Alpay Aydinguler</Authors>
+    <Copyright>Copyright (c) 2026 Alpay Aydinguler</Copyright>
+    <Version>0.1.0</Version>
+    <RepositoryUrl>https://github.com/AlpayAydinguler/FootballManagerRegenNotifier</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+
+  <!--
+    TreatWarningsAsErrors is CI-only on purpose.
+
+    Locally it makes the very first `dotnet build` fail on style/analyzer noise,
+    and the usual reaction is to turn the whole guard off permanently. Keeping it
+    scoped to CI means the guard survives.
+  -->
+  <PropertyGroup>
+    <TreatWarningsAsErrors Condition="'$(ContinuousIntegrationBuild)' == 'true'">true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <!-- CS1591: missing XML comment on a public member. We do not require XML docs. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+</Project>

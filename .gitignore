@@ -1,0 +1,62 @@
+## .NET / Visual Studio
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Bb]uild[Ll]og.*
+artifacts/
+publish/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+.vs/
+.vscode/
+*.psess
+*.vsp
+*.vspx
+*.sap
+*.pidb
+*.svclog
+*.scc
+
+## Rider / JetBrains
+.idea/
+*.sln.iml
+
+## Test / coverage
+[Tt]est[Rr]esult*/
+coverage*.json
+coverage*.xml
+coverage*.info
+*.coverage
+*.coveragexml
+TestResults/
+
+## NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+!packages/build/
+
+## OS
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+## App runtime output (never commit a user's captured screen data or logs)
+logs/
+*.log
+settings.json
+state.json
+samples/local/
+
+## Tesseract language data is intentionally COMMITTED (see tessdata/README.md).
+## Do not add tessdata/ here.

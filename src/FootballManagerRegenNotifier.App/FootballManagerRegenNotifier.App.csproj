@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>FootballManagerRegenNotifier.App</RootNamespace>
+    <AssemblyName>FMRegenNotifier</AssemblyName>
+    <UseWPF>true</UseWPF>
+    <!-- WinForms is needed for NotifyIcon (tray). It is additive with UseWPF and
+         also brings the in-box System.Drawing.Common into scope. Do NOT add a
+         System.Drawing.Common PackageReference: it shadows the in-box assembly. -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <Platforms>AnyCPU;x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageReference Include="Serilog" Version="4.3.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+    <!-- Tesseract is referenced here as well as in Capture on purpose: its
+         build/Tesseract.targets copies the native x64/ and x86/ payload relative
+         to the project it runs in. Referencing it from the exe project turns a
+         fragile transitive inference into a direct copy. CI asserts the result. -->
+    <PackageReference Include="Tesseract" Version="5.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FootballManagerRegenNotifier.Core\FootballManagerRegenNotifier.Core.csproj" />
+    <ProjectReference Include="..\FootballManagerRegenNotifier.Capture\FootballManagerRegenNotifier.Capture.csproj" />
+  </ItemGroup>
+
+  <!-- Ship the seed dataset and the OCR language data next to the exe. -->
+  <ItemGroup>
+    <None Include="..\..\tessdata\eng.traineddata" Link="tessdata\eng.traineddata" Condition="Exists('..\..\tessdata\eng.traineddata')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\data\countries.xlsx" Link="data\countries.xlsx" Condition="Exists('..\..\data\countries.xlsx')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

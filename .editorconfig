@@ -1,0 +1,33 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{json,yml,yaml,xml,csproj,props,targets}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.cs]
+# Language conventions
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_style_var_for_built_in_types = false:suggestion
+csharp_prefer_braces = true:suggestion
+dotnet_sort_system_directives_first = true
+
+# Style rules stay suggestions so they can never break a build that also
+# sets TreatWarningsAsErrors. Correctness analyzers remain warnings.
+dotnet_diagnostic.IDE0055.severity = suggestion
+dotnet_diagnostic.IDE0160.severity = suggestion
+dotnet_diagnostic.IDE0290.severity = suggestion
+
+# CA1416 (platform compatibility) fires on every P/Invoke in a Windows-only
+# project that is already TFM-guarded. Keep it visible, never fatal.
+dotnet_diagnostic.CA1416.severity = suggestion
+dotnet_diagnostic.CA2000.severity = suggestion

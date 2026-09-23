@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Plain net10.0 on purpose.
+
+    This project holds the correctness core: the date state machine, the trigger
+    calendar and the parser. Targeting a non-Windows TFM means the compiler
+    physically prevents screen-capture, System.Drawing or WPF code from leaking
+    in here, and the test suite runs in milliseconds with no desktop.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>FootballManagerRegenNotifier.Core</RootNamespace>
+    <AssemblyName>FootballManagerRegenNotifier.Core</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ClosedXML" Version="0.105.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="FootballManagerRegenNotifier.Core.Tests" />
+  </ItemGroup>
+
+</Project>

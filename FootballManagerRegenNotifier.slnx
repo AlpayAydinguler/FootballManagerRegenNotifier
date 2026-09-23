@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FootballManagerRegenNotifier.App/FootballManagerRegenNotifier.App.csproj" />
+    <Project Path="src/FootballManagerRegenNotifier.Capture/FootballManagerRegenNotifier.Capture.csproj" />
+    <Project Path="src/FootballManagerRegenNotifier.Core/FootballManagerRegenNotifier.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FootballManagerRegenNotifier.Capture.Tests/FootballManagerRegenNotifier.Capture.Tests.csproj" />
+    <Project Path="tests/FootballManagerRegenNotifier.Core.Tests/FootballManagerRegenNotifier.Core.Tests.csproj" />
+  </Folder>
+</Solution>
