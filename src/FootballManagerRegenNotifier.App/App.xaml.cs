@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
@@ -34,7 +35,8 @@ public partial class App : System.Windows.Application
                 Path.Combine(LogDirectory, "fmrn-.log"),
                 rollingInterval: RollingInterval.Day,
                 retainedFileCountLimit: 7,
-                shared: true)
+                shared: true,
+                formatProvider: CultureInfo.InvariantCulture)
             .CreateLogger();
 
         Log.Information("FM Regen Notifier starting.");

@@ -15,6 +15,16 @@
     <Platforms>AnyCPU;x64</Platforms>
     <PlatformTarget>x64</PlatformTarget>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!--
+      WFO0003 asks for DPI awareness to move from the manifest to the WinForms
+      ApplicationHighDpiMode property. Keep it in the manifest: manifest awareness
+      is applied by the OS before a single line of code runs, whereas
+      Application.SetHighDpiMode is a WinForms call made after startup. For an app
+      whose whole job is turning screen coordinates into pixels, "correct before
+      any window exists" is the property that matters, and WinForms is only here
+      for the tray icon.
+    -->
+    <NoWarn>$(NoWarn);WFO0003</NoWarn>
   </PropertyGroup>
 
   <!-- UseWPF and UseWindowsForms together make System.Drawing and

@@ -100,9 +100,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _whitelist = OcrSettings.Default.CharacterWhitelist;
     [ObservableProperty] private bool _useLegacyEngine;
 
-    public Array InvertModes => Enum.GetValues<InvertMode>();
+    public static Array InvertModes => Enum.GetValues<InvertMode>();
 
-    public Array DateOrders => Enum.GetValues<DateOrder>();
+    public static Array DateOrders => Enum.GetValues<DateOrder>();
 
     [ObservableProperty] private DateOrder _preferredDateOrder = DateOrder.DayFirst;
     [ObservableProperty] private bool _autoLearnDateOrder = true;

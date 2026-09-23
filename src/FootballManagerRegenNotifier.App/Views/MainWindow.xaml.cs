@@ -10,7 +10,7 @@ using Serilog;
 
 namespace FootballManagerRegenNotifier.App.Views;
 
-public partial class MainWindow : Window
+public partial class MainWindow : Window, IDisposable
 {
     private readonly MainViewModel _vm;
     private System.Windows.Forms.NotifyIcon? _tray;
@@ -222,6 +222,23 @@ public partial class MainWindow : Window
         }
 
         _vm.Persist();
+        Dispose();
+
+        System.Windows.Application.Current.Shutdown();
+    }
+
+    /// <summary>
+    /// Releases the tray icon and the view model.
+    /// </summary>
+    /// <remarks>
+    /// A WPF Window has its own lifecycle and nothing calls Dispose on one, so
+    /// this is invoked from <c>OnClosing</c>. It exists as a real implementation
+    /// rather than an analyzer suppression because the tray icon genuinely does
+    /// need releasing: an undisposed NotifyIcon lingers in the notification area
+    /// until the user hovers over it.
+    /// </remarks>
+    public void Dispose()
+    {
         _vm.Dispose();
 
         if (_tray is not null)
@@ -231,6 +248,6 @@ public partial class MainWindow : Window
             _tray = null;
         }
 
-        System.Windows.Application.Current.Shutdown();
+        GC.SuppressFinalize(this);
     }
 }
