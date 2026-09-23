@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      # ContinuousIntegrationBuild turns warnings into errors. It is deliberately
+      # not the local default: a first-run build that fails on analyzer noise just
+      # teaches people to switch the guard off for good.
+      - name: Build
+        run: dotnet build --no-restore -c Release -p:ContinuousIntegrationBuild=true
+
+      - name: Test
+        run: dotnet test --no-build -c Release --verbosity normal
+
+      - name: Publish
+        run: >
+          dotnet publish src/FootballManagerRegenNotifier.App/FootballManagerRegenNotifier.App.csproj
+          -c Release -r win-x64 --self-contained false
+          -o ${{ github.workspace }}/publish
+
+      # The Tesseract package copies its native payload into x64/ next to the exe
+      # through a targets file that only sets CopyToOutputDirectory. Publish
+      # infers the rest, which works but is two layers of undocumented behaviour,
+      # so assert it rather than discovering a broken release from a bug report.
+      - name: Verify the native OCR payload shipped
+        shell: pwsh
+        run: |
+          $missing = @()
+          foreach ($f in 'FMRegenNotifier.exe', 'x64/tesseract50.dll', 'x64/leptonica-1.82.0.dll', 'tessdata/eng.traineddata') {
+            if (-not (Test-Path "publish/$f")) { $missing += $f }
+          }
+          if ($missing.Count -gt 0) {
+            Write-Error "Missing from the publish output: $($missing -join ', ')"
+            exit 1
+          }
+          Write-Host "All required files present."
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          Compress-Archive -Path publish/* -DestinationPath artifacts/FMRegenNotifier-win-x64.zip -Force
+          (Get-FileHash artifacts/FMRegenNotifier-win-x64.zip -Algorithm SHA256).Hash |
+            Out-File artifacts/SHA256SUMS.txt -Encoding utf8
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FMRegenNotifier-win-x64
+          path: artifacts/
+          retention-days: 14
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: FMRegenNotifier-win-x64
+          path: artifacts
+
+      - name: Create the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # PowerShell does not glob for native executables, so expand the paths
+          # before handing them to gh.
+          $files = (Get-ChildItem artifacts -File).FullName
+          gh release create $env:GITHUB_REF_NAME @files --generate-notes --repo $env:GITHUB_REPOSITORY
