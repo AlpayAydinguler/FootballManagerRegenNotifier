@@ -522,6 +522,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             ApplyPreview(report.Outcome);
             GameStatus = DescribeGate(report.Outcome);
             RecordGateChange(report.Outcome);
+            RecordSampleStatusChange(report.Outcome);
 
             foreach (var e in report.Events) Record(e);
 
@@ -539,6 +540,48 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     private GateVerdict? _lastGateVerdict;
+    private SampleStatus? _lastSampleStatus;
+
+    /// <summary>
+    /// Logs a change in what the sampler is getting back.
+    /// </summary>
+    /// <remarks>
+    /// Only a clean read produces tracker events, so a run of failed captures used
+    /// to produce no output whatsoever: the date simply froze and nothing said
+    /// why. Reporting the transition turns a silent dead end into something the
+    /// user can act on, while logging on change rather than per tick keeps it from
+    /// flooding at one sample per second.
+    /// </remarks>
+    private void RecordSampleStatusChange(ReadOutcome outcome)
+    {
+        if (outcome.Gate != GateVerdict.Allowed) return;
+
+        var status = outcome.Observation.Status;
+        if (_lastSampleStatus == status) return;
+
+        var previous = _lastSampleStatus;
+        _lastSampleStatus = status;
+
+        switch (status)
+        {
+            case SampleStatus.Ok when previous is not null:
+                Log.Add(LogSeverity.Success, "Reading the date again.");
+                break;
+            case SampleStatus.CaptureFailed:
+                Log.Add(LogSeverity.Warning,
+                    "Capture is coming back blank. If the game is mid-processing this usually clears by itself; "
+                    + "if it persists, check Football Manager is in windowed or borderless mode rather than exclusive fullscreen.");
+                break;
+            case SampleStatus.NoDatePresent:
+                Log.Add(LogSeverity.Warning,
+                    "No date found in the capture region -- the game may be on a screen that does not show it.");
+                break;
+            case SampleStatus.Unreadable:
+                Log.Add(LogSeverity.Warning,
+                    $"Region captured but not readable{(outcome.Observation.FailureDetail is { Length: > 0 } d ? $": {d}" : ".")}");
+                break;
+        }
+    }
 
     /// <summary>
     /// Logs the gate's own explanation the first time a verdict changes.

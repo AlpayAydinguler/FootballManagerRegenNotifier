@@ -112,13 +112,23 @@ public sealed class ScreenCapture : IScreenCapture
                 var pixels = new byte[width * height * 4];
                 Array.Copy(_buffer!, pixels, pixels.Length);
 
-                return CaptureOutcome.Ok(new CapturedFrame
+                var frame = new CapturedFrame
                 {
                     Pixels = pixels,
                     Width = width,
                     Height = height,
                     Stride = width * 4,
-                });
+                };
+
+                // A flat frame is how a blocked grab presents: BitBlt reports
+                // success and hands back solid black. The screen device context is
+                // cached for the life of this object, and a display-mode change or
+                // a session transition can leave that cached handle reading black
+                // forever after. Dropping it means the next tick starts from a
+                // fresh one, which turns a permanently dead capture into a blip.
+                if (frame.IsUniform()) ReleaseScreenDc();
+
+                return CaptureOutcome.Ok(frame);
             }
             catch (Exception ex)
             {
@@ -149,6 +159,17 @@ public sealed class ScreenCapture : IScreenCapture
         _buffer = new byte[width * height * 4];
         _width = width;
         _height = height;
+    }
+
+    /// <summary>Drops the cached screen DC so the next capture re-acquires one.</summary>
+    private void ReleaseScreenDc()
+    {
+        ReleaseSurface();
+        if (_screenDc != IntPtr.Zero)
+        {
+            NativeMethods.ReleaseDC(IntPtr.Zero, _screenDc);
+            _screenDc = IntPtr.Zero;
+        }
     }
 
     private void ReleaseSurface()
