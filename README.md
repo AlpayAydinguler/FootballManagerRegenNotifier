@@ -1,5 +1,7 @@
 # FM Regen Notifier
 
+[![Sponsor this project](https://img.shields.io/badge/Sponsor-this_project-db61a2?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/AlpayAydinguler)
+
 A desktop companion for **Football Manager 2026** that watches the in-game clock
 and tells you when a youth intake window opens.
 
