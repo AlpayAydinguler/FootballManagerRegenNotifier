@@ -51,8 +51,8 @@ public sealed class GameGate(AppSettings settings)
     {
         if (!_settings.RequireGameRunning) return new GateResult(GateVerdict.Allowed, null);
 
-        string name = _settings.GameProcessName;
-        if (string.IsNullOrWhiteSpace(name)) return new GateResult(GateVerdict.Allowed, null);
+        string name = NormaliseProcessName(_settings.GameProcessName);
+        if (name.Length == 0) return new GateResult(GateVerdict.Allowed, null);
 
         Process[] matches;
         try
@@ -105,6 +105,37 @@ public sealed class GameGate(AppSettings settings)
         {
             foreach (var p in matches) p.Dispose();
         }
+    }
+
+    /// <summary>
+    /// Trims a process name to the form <see cref="Process.GetProcessesByName(string)"/>
+    /// expects.
+    /// </summary>
+    /// <remarks>
+    /// That API matches the name <b>without</b> the extension, so "fm.exe" silently
+    /// matches nothing and the gate reports the game as not running while it is
+    /// plainly on screen. Typing the executable name into a field labelled "game
+    /// process name" is the obvious thing to do, so accept it rather than treating
+    /// it as user error. A full path is accepted for the same reason.
+    /// </remarks>
+    public static string NormaliseProcessName(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
+
+        string name = raw.Trim().Trim('"');
+
+        // Accept a pasted full path as well as a bare name.
+        if (name.Contains('\\') || name.Contains('/'))
+        {
+            name = Path.GetFileName(name);
+        }
+
+        if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+        {
+            name = name[..^4];
+        }
+
+        return name.Trim();
     }
 
     /// <summary>Best-effort full path of the running game, for pre-filling the setting.</summary>

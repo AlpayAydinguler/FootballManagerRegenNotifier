@@ -153,6 +153,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _alertTrayBalloon = true;
     [ObservableProperty] private bool _minimiseToTray = true;
     [ObservableProperty] private bool _startMonitoringOnLaunch;
+    [ObservableProperty] private int _minMeanConfidencePercent = 55;
+    [ObservableProperty] private int _minSymbolConfidencePercent = 70;
 
     public string SelectedSummary =>
         $"{Countries.Count(c => c.IsSelected)} of {Countries.Count} selected";
@@ -323,6 +325,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         AlertTrayBalloon = AlertTrayBalloon,
         MinimiseToTray = MinimiseToTray,
         StartMonitoringOnLaunch = StartMonitoringOnLaunch,
+        MinMeanConfidence = Math.Clamp(MinMeanConfidencePercent, 0, 100) / 100.0,
+        MinSymbolConfidence = Math.Clamp(MinSymbolConfidencePercent, 0, 100) / 100.0,
     };
 
     private void ApplySettings(AppSettings s)
@@ -359,6 +363,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         AlertTrayBalloon = s.AlertTrayBalloon;
         MinimiseToTray = s.MinimiseToTray;
         StartMonitoringOnLaunch = s.StartMonitoringOnLaunch;
+        MinMeanConfidencePercent = (int)Math.Round(s.MinMeanConfidence * 100);
+        MinSymbolConfidencePercent = (int)Math.Round(s.MinSymbolConfidence * 100);
 
         _suppressPersist = false;
     }
@@ -515,6 +521,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             ApplyPreview(report.Outcome);
             GameStatus = DescribeGate(report.Outcome);
+            RecordGateChange(report.Outcome);
 
             foreach (var e in report.Events) Record(e);
 
@@ -529,6 +536,33 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 UpdateNextIntake();
             }
         });
+    }
+
+    private GateVerdict? _lastGateVerdict;
+
+    /// <summary>
+    /// Logs the gate's own explanation the first time a verdict changes.
+    /// </summary>
+    /// <remarks>
+    /// "Football Manager is not running" is useless on its own when the game is
+    /// plainly on screen — the useful part is which process name was looked for,
+    /// which is exactly what the gate already knows and previously threw away.
+    /// Logged on transition rather than per tick so it cannot flood the log at
+    /// one sample per second.
+    /// </remarks>
+    private void RecordGateChange(ReadOutcome outcome)
+    {
+        if (_lastGateVerdict == outcome.Gate) return;
+        _lastGateVerdict = outcome.Gate;
+
+        if (outcome.Gate == GateVerdict.Allowed)
+        {
+            Log.Add(LogSeverity.Success, "Football Manager detected — reading the screen.");
+        }
+        else if (outcome.GateDetail is { Length: > 0 } detail)
+        {
+            Log.Add(LogSeverity.Warning, $"Paused: {detail}");
+        }
     }
 
     private static string DescribeGate(ReadOutcome outcome) => outcome.Gate switch

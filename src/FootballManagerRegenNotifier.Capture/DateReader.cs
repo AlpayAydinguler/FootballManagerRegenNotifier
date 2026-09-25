@@ -29,6 +29,9 @@ public sealed record ReadOutcome
     public DateOrder? LearnedOrder { get; init; }
 
     public GateVerdict Gate { get; init; } = GateVerdict.Allowed;
+
+    /// <summary>The gate's own explanation, e.g. which process name it looked for.</summary>
+    public string? GateDetail { get; init; }
 }
 
 /// <summary>
@@ -63,6 +66,7 @@ public sealed class DateReader(IScreenCapture capture, IOcrEngine engine, GameGa
                 {
                     Observation = Observation.GameNotRunning(),
                     Gate = verdict.Verdict,
+                    GateDetail = verdict.Detail,
                 };
             }
         }

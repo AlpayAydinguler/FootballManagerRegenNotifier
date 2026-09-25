@@ -163,6 +163,20 @@ public sealed record AppSettings
 
     public int PollIntervalMs { get; init; } = 1000;
 
+    /// <summary>Mean OCR confidence below which a reading is discarded, 0..1.</summary>
+    /// <remarks>
+    /// Exposed because it is the one setting that can silently stop the app doing
+    /// anything. Tesseract does not always report a useful confidence -- a reading
+    /// whose text is plainly correct can still come back at zero -- and with the
+    /// floor hardcoded there was no way to tell the difference between "nothing is
+    /// happening" and "every sample is being rejected". Lower it to 0 to accept
+    /// whatever the engine returns.
+    /// </remarks>
+    public double MinMeanConfidence { get; init; } = 0.55;
+
+    /// <summary>Weakest per-character confidence below which a reading is discarded, 0..1.</summary>
+    public double MinSymbolConfidence { get; init; } = 0.70;
+
     public DateOrder PreferredDateOrder { get; init; } = DateOrder.DayFirst;
 
     public bool AutoLearnDateOrder { get; init; } = true;

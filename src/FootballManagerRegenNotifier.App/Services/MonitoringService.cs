@@ -146,7 +146,11 @@ public sealed class MonitoringService(
             if (respectGate)
             {
                 var selected = _selected();
-                var tracker = new DateTracker(_calendar(), new TrackerConfig());
+                var tracker = new DateTracker(_calendar(), new TrackerConfig
+                {
+                    MinMeanConfidence = config.MinMeanConfidence,
+                    MinSymbolConfidence = config.MinSymbolConfidence,
+                });
                 var step = tracker.Step(State, outcome.Observation, rule => selected.Contains(rule.Code));
                 State = step.State;
                 events = step.Events;
