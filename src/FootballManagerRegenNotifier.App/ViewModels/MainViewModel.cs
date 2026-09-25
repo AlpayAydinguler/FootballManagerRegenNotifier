@@ -456,6 +456,21 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private void ApplyPreview(ReadOutcome outcome)
     {
+        // A sample the privacy gate refused carries no image and no text: it was
+        // never taken. Blanking the panel for it would wipe a perfectly good
+        // reading the moment the user alt-tabs to this window to look at it,
+        // which makes a working app look broken at exactly the moment someone
+        // checks on it. Leave the last real reading on screen and say why it is
+        // holding instead.
+        if (outcome.Gate != GateVerdict.Allowed)
+        {
+            PreviewWarning = outcome.Gate == GateVerdict.GameNotInForeground
+                ? "Paused — Football Manager is not the active window. Showing the last reading."
+                : "Paused — Football Manager is not running. Showing the last reading.";
+            HasPreviewWarning = true;
+            return;
+        }
+
         if (outcome.PreprocessedFrame is { } frame)
         {
             PreviewImage = FrameImageSource.Create(frame);
