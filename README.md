@@ -30,6 +30,7 @@ touches the save, and never injects anything into the process.
 - [Building from source](#building-from-source)
 - [Contributing](#contributing)
 - [Licence and attribution](#licence-and-attribution)
+- [Supporting the project](#supporting-the-project)
 
 ---
 
@@ -340,3 +341,18 @@ youth ratings from
 and is not affiliated with, endorsed by or sponsored by Sports Interactive, SEGA,
 Passion4FM or FM Scout. Football Manager is a trademark of Sports Interactive and
 SEGA.
+
+---
+
+## Supporting the project
+
+FM Regen Notifier is free and always will be. If it saved you an intake you would
+otherwise have sailed past, you can support it through
+[**GitHub Sponsors**](https://github.com/sponsors/AlpayAydinguler) — the Sponsor
+button at the top of this page.
+
+Sponsorship is entirely optional and changes nothing about the tool: no features
+are held back, and there is no paid tier.
+
+Contributions of the other kind are just as welcome — corrected intake dates in
+particular. See [Contributing](#contributing).

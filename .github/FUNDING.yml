@@ -1,0 +1,14 @@
+# Renders the "Sponsor" button at the top of the repository.
+#
+# GitHub Sponsors takes 0% from sponsorships by individuals — the full amount
+# reaches the maintainer. Türkiye is a supported region.
+#
+# The button only appears once the Sponsors profile is approved; until then this
+# file is harmless and does nothing.
+github: AlpayAydinguler
+
+# Alternatives, if a second option is ever wanted. Uncomment and fill in.
+# ko_fi: your-username
+# buy_me_a_coffee: your-username
+# liberapay: your-username
+# custom: ['https://example.com/donate']
