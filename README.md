@@ -252,11 +252,27 @@ Check the Activity Log. Common causes:
 
 ### The date is read but alerts never fire
 
-Tick **Verbose** in the Activity Log to see every sample. If you see
-`Rejected … confidence` repeatedly, the image is too marginal — work through the
-7-vs-1 steps above. If you see the date advancing but no alerts, check that the
-countries you expect are ticked and that their windows are actually ahead of the
-current in-game date.
+Tick **Verbose** in the Activity Log to see every sample.
+
+If you see `Rejected … confidence` on readings whose text looks **wrong**, the
+image is too marginal — work through the 7-vs-1 steps above.
+
+If you see it on readings whose text looks **correct**, that is a different
+problem: Tesseract does not always report a useful confidence, and a perfectly
+good reading can come back at zero. Lower **Minimum mean confidence** and
+**Minimum per-character confidence** on the Alerts & Options tab, or set both to
+0 to accept whatever the engine returns. A healthy setup reads around 85–99%, so
+if yours sits far below that consistently, tune the image rather than the floor.
+
+If the date advances but no alerts fire, check that the countries you expect are
+ticked and that their windows are ahead of the current in-game date.
+
+### "Football Manager is not running" while it is plainly running
+
+The Activity Log names the process it searched for. The field accepts `fm`,
+`fm.exe` or a full path — all are normalised — so if it still cannot find the
+game, check the name against Task Manager's Details tab and update **Game
+process name**.
 
 ### Alerts fire but I never notice them
 
