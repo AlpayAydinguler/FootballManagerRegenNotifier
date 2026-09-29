@@ -643,6 +643,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             TrackerEventKind.SampleRejected => LogSeverity.Detail,
             TrackerEventKind.AwaitingConfirmation => LogSeverity.Detail,
             TrackerEventKind.ClockRegressed => LogSeverity.Warning,
+            TrackerEventKind.ClockResynced => LogSeverity.Warning,
             TrackerEventKind.TriggersReArmed => LogSeverity.Success,
             TrackerEventKind.DateAdopted => LogSeverity.Success,
             _ => LogSeverity.Info,
@@ -688,6 +689,28 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         GameStatus = "–";
         Log.Add(LogSeverity.Info, "Monitoring stopped.");
         PersistState();
+    }
+
+    /// <summary>
+    /// Forgets the tracked date, for a player switching to a different save.
+    /// </summary>
+    /// <remarks>
+    /// The tracker copes with a save switch by itself, but it cannot tell a save
+    /// a few months later from a holiday, and reports every intake in between as
+    /// missed; and one far away takes about twenty seconds to be believed. This
+    /// is the explicit version: the next date read is adopted as a fresh start.
+    /// </remarks>
+    [RelayCommand]
+    private async Task ResetTrackingAsync()
+    {
+        if (_monitor is null) return;
+
+        await _monitor.ResetTrackingAsync().ConfigureAwait(true);
+        LastSeenDate = "–";
+        Log.Add(LogSeverity.Info,
+            "Forgot the tracked date. The next date read is adopted as a fresh start: nothing is alerted for the gap, and intake windows open at that date are announced.");
+        PersistState();
+        UpdateNextIntake();
     }
 
     [RelayCommand(CanExecute = nameof(IsIdle))]

@@ -216,15 +216,73 @@ and asks whether any armed trigger falls in the half-open interval between it an
 the current reading.
 
 ```
-delta == 0                → no-op
-0 < delta <= MAX_JUMP     → fire every trigger T where lastSeen < T <= current
-delta < 0                 → regression: fire nothing, re-arm triggers in (current, lastSeen]
-delta > MAX_JUMP (400d)   → quarantine; do not commit, do not fire
-lastSeen == null          → cold start: adopt, arm, fire nothing
+lastSeen == null             → cold start: adopt, arm, fire nothing (after Reset date:
+                               also announce windows open now)
+delta == 0                   → no-op
+0 < delta <= MAX_JUMP        → fire every trigger T where lastSeen < T <= current
+-MAX_JUMP <= delta < 0       → regression: fire nothing, re-arm triggers in (current, lastSeen]
+|delta| > MAX_JUMP (400d)    → quarantine: do not commit, do not fire, count towards a re-sync
+same date in another year    → quarantine as above, even inside MAX_JUMP (±7 days)
 ```
 
 Retroactive alerts are labelled with how late they are, so "the window opened
 five days ago" reads differently from "the window opens today".
+
+**Quarantine is symmetric, and it is not a dead end.** An earlier version only
+bounded forward jumps: a year misread as 2013 therefore went through as a save
+reload, was committed and saved, and turned every correct reading afterwards into
+an implausible forward jump, permanently. The ceiling can tell that two dates are
+far apart but not which one is wrong, so quarantined readings that agree with each
+other (each within `MAX_JUMP` of the last) build a **re-sync candidate**. After 10
+confirmations (about 20 seconds) with no reading of `lastSeen` in between, the
+candidate wins. A single read of `lastSeen`, or a confirmed plausible reading,
+starts the count again.
+
+The same-date-in-another-year rule exists because the likeliest misread year is
+one wrong last digit, and 2025 read as 2026 is 365 days: inside the ceiling, and
+before this rule it fired a whole year of alerts on every flicker. Normal play
+never has that shape; a holiday of about a year does, and simply waits out a
+re-sync.
+
+**A re-sync replays the candidate from an origin.** The candidate's own moves are
+replayed exactly as the rows above would have handled them: re-arm down to the
+lowest date it visited, then fire everything from there to where it is now. So an
+intake crossed during the wait is reported late rather than lost. A confirmed
+reading that carries on from the candidate (closer to it than to `lastSeen`, and
+at most 60 days past it) counts towards the candidate instead of being committed:
+a save loaded a year back walks out of the misread-year shape within a week of
+Continue clicks. Likewise only a reading that carries on from the candidate (at
+most 60 days past it, or a reload back within the ceiling, and not in the
+misread-year shape) extends it; anything else starts a new candidate, so a save
+shown for a few seconds by mistake is not merged with the one loaded after it.
+The origin is the first of:
+
+1. the timeline the last re-sync left, with its alerts, when the candidate comes
+   back to it: anywhere from `MAX_JUMP` before where it was left to 60 days after,
+   or the whole ceiling after if that date came from `state.json` or the
+   candidate is the date being left in another year (the real date returning
+   after a misread year, possibly past a long holiday). A misread that won, or a
+   save switched away from, is picked up where it was left; only the most recent
+   one is remembered, in memory only;
+2. the committed timeline itself, when the candidate is inside the ceiling and
+   was held only for its shape (a year-long holiday comes out as if accepted at
+   once, only later);
+3. otherwise a fresh start the day before the candidate's first reading.
+
+Alerts never carry across timelines any other way. Two saves at the same time of
+year in different years look exactly like a misread year; carrying one's alerts
+into the other would silently suppress an open window, where the alternative, a
+misread year that wins repeating an intake, only costs a duplicate. Windows
+already open at the new date are then announced unless the origin had alerted
+them, so a re-sync never leaves an open window unmentioned.
+
+**A date restored from `state.json` is a hint, not a fact.** It may belong to
+another save, or be a misread saved by an earlier version, so until it has been
+seen on screen the first confirmed reading beyond the ceiling wins at once. One
+held only for its misread-year shape still waits: believed at once, two samples of
+a misread digit would fire a year of alerts. A plausible reading still counts from
+the restored date, which is what reports the intakes crossed while the app was
+closed, and so does a return to it after a misread won at launch.
 
 ### 3. Anti-spam is two-layer
 
@@ -373,6 +431,22 @@ surfaced in the dashboard.
   start of the period, which is what the brief asked for.
 - **No save identity.** No `.fm` files exist under the user profile on the target
   machine, so distinguishing "reloaded this save" from "switched saves" is not
-  possible; both are treated as a regression and re-arm.
+  possible. An earlier save is treated as a regression and re-arms; a later one
+  within 400 days as a holiday, reporting every intake in between as missed; one
+  further away as a probable misread, switched to after about twenty seconds (at
+  once after a restart). Only the save most recently switched away from is picked
+  up where it was left. The header's **Reset date** is the explicit override.
+- **A misread can win.** A wrong date that is all the app sees for twenty seconds
+  is switched to, because it is indistinguishable from loading another save. The
+  switch back loses nothing, but while a misread year is the tracked date intakes
+  fire on the right day under the wrong year, and are reported again, correctly,
+  once the real date is back. A misread by exactly one year that wins is
+  indistinguishable from a year-long holiday, and reports that year's intakes as
+  missed.
+- **A restored date is remembered all session.** After a restart, a save loaded
+  up to a year after the saved date is taken for that save played on while the
+  app was closed, even hours later, and the gap is reported as missed. Narrowing
+  this would lose the alerts in the case it exists for, which produces the same
+  readings; **Reset date** clears it.
 - **FM27 arrives November 2026** and will invalidate the default coordinates.
   Re-calibration and a spreadsheet edit are the intended response.

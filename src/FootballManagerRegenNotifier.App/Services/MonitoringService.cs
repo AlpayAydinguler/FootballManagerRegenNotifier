@@ -67,6 +67,30 @@ public sealed class MonitoringService(
         LearnedOrder = learnedOrder;
     }
 
+    /// <summary>
+    /// Forgets the tracked date and every alert already given, so the next date
+    /// read is adopted as a fresh start. Safe to call while sampling.
+    /// </summary>
+    /// <remarks>
+    /// Taken under the read gate: a sample in flight reads State, steps it and
+    /// writes it back, and a reset landing in the middle would be overwritten by
+    /// the stale result a moment later.
+    /// </remarks>
+    public async Task ResetTrackingAsync()
+    {
+        if (_disposed) return;
+
+        await _readGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            State = TrackerState.AfterReset;
+        }
+        finally
+        {
+            _readGate.Release();
+        }
+    }
+
     public void Start()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);

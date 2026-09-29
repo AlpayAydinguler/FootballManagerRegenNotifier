@@ -152,17 +152,49 @@ once, correctly, labelled with how late it is:
 > England: intake window opened 5 days ago on 14/03/2026 — you are now at
 > 19/03/2026. Still open until 31/03/2026.
 
-Three more things fall out of that design:
+Four more things fall out of that design:
 
 - **A single misread cannot poison the state.** A new date must be seen twice in
-  a row before it is committed, and a jump of more than 400 days is discarded as
-  a misread rather than believed.
+  a row before it is committed. A jump of more than 400 days, forwards or
+  backwards, is held back as a misread rather than believed, and so is a jump to
+  the same date in another year, however short: 2025 read as 2026 is only 365
+  days.
+- **A persistent one corrects itself.** The app cannot tell which of two dates
+  is the wrong one. If the far-off date keeps reading the same way for about
+  twenty seconds without the old one showing up again, it switches: either the
+  old date was the misread, or you loaded a save from another season. If the new
+  date was the misread instead, it switches back the same way once the real one
+  is read again, and picks up where it left off. Either way, an intake crossed
+  meanwhile is reported, and one already alerted is not announced again, with two
+  exceptions. While a misread year is the tracked date, intakes still fire on the
+  right day but under the wrong year, and are reported again, correctly, when the
+  real date comes back. And a misread by one year that holds for those twenty
+  seconds cannot be told from a year-long holiday, so that year's intakes are
+  reported as missed, and announced again when the game really reaches them.
 - **Reloading a save re-arms.** Save-scumming an intake is the main reason to
   want this tool, so a backwards jump un-fires the alerts it crossed. A real-time
   cooldown stops a tight reload loop from machine-gunning the same alert.
 - **Only a clean read changes anything.** A failed capture, a menu covering the
   clock, or the game being closed are each distinct states, and none of them is
   treated as "the date did not change".
+
+### Switching between saves
+
+The app has no way to know which save is loaded; it only sees the date. So a
+switch looks like one of the moves above:
+
+| The save you load is… | What happens |
+|---|---|
+| Earlier, within about a year | A reload: its upcoming intakes are re-armed at once. One almost exactly a season earlier (the same date, give or take a week) looks like a misread year, so it waits about twenty seconds first; pressing Continue meanwhile loses nothing. |
+| More than about a year away, either way | About twenty seconds of "Ignored implausible jump", then it switches. Nothing is reported for the gap; windows open in that save right now are announced. |
+| The one you most recently switched away from | The same, and it picks up where that save was left, as long as it is no more than about two months (in game) past that point: nothing already alerted in it is repeated. Only the most recent one is remembered; **Reset date** and restarting the app forget it, and going back to it after a restart announces its open windows again. |
+| Later, within about a year | Indistinguishable from a holiday, so every intake in between is reported as missed. |
+| Any, after restarting the app | The date saved last time is only trusted once it is seen on screen. If the save on screen is more than a year away, it switches at once. The saved date is then still remembered for the rest of the session: a save loaded later that lands up to about a year after it is taken for that save played on while the app was closed, and the intakes in between are reported as missed. |
+
+For the "later, within about a year" row, or whenever you want a clean start,
+press **Reset date** in the header after loading the save. The app forgets the
+tracked date and adopts the next one it reads without reporting the gap, and
+announces any intake window open at that date.
 
 ---
 
@@ -266,6 +298,29 @@ if yours sits far below that consistently, tune the image rather than the floor.
 
 If the date advances but no alerts fire, check that the countries you expect are
 ticked and that their windows are ahead of the current in-game date.
+
+### The log keeps saying "Ignored implausible jump"
+
+The app has read a date more than 400 days away from the one it is tracking, or
+the same date in another year, and is treating it as a misread. That is correct
+for a one-off, and it clears by itself as soon as the tracked date is read again.
+
+If the log counts up to a switch (`1/10`, `2/10`, …) and then says `Switched to
+…`, one of the two dates was wrong and the app has gone with the one that kept
+reading: usually the tracked date was a misread year, such as 2013, or you
+loaded another save. Nothing needs doing. If it switched to the wrong one, it
+switches back once the real date keeps being read, and reports anything crossed
+meanwhile. If this happens often, the region is catching something that is not
+the clock, or the year is being misread: check the preview and work through the
+7-vs-1 steps above.
+
+### I loaded another save and got a burst of "missed" alerts
+
+A save up to about a year later than the one being tracked looks exactly like a
+holiday, and a holiday is supposed to report every window it skipped. Press
+**Reset date** after loading a different save to start fresh instead: the gap is
+not reported, and windows open in that save are. See
+[Switching between saves](#switching-between-saves).
 
 ### "Football Manager is not running" while it is plainly running
 

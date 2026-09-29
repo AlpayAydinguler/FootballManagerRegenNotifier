@@ -74,6 +74,12 @@ public sealed class TriggerCalendar
     {
         foreach (int year in occurrenceYears)
         {
+            // A garbage reading of year 0001 or 9999 is still a reading, and the
+            // padding in YearsSpanning then asks for year 0 or 10000. Skip years
+            // whose windows, or the day after them, would fall off the calendar
+            // rather than throw from the sampler thread.
+            if (year <= DateOnly.MinValue.Year || year >= DateOnly.MaxValue.Year) continue;
+
             foreach (var rule in _rules)
             {
                 var open = SafeDate(year, rule.WindowStartMonth, rule.WindowStartDay);
