@@ -83,7 +83,7 @@ public sealed class MonitoringService(
         await _readGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            State = TrackerState.Initial;
+            State = TrackerState.AfterReset;
         }
         finally
         {

@@ -165,7 +165,10 @@ Four more things fall out of that design:
   old date was the misread, or you loaded a save from another season. If the new
   date was the misread instead, it switches back the same way once the real one
   is read again, and picks up where it left off. Either way, an intake crossed
-  meanwhile is reported, and one already alerted is not announced again.
+  meanwhile is reported, and one already alerted is not announced again. The one
+  exception: while a misread year is the tracked date, intakes still fire on the
+  right day but under the wrong year, and are reported again, correctly, when the
+  real date comes back.
 - **Reloading a save re-arms.** Save-scumming an intake is the main reason to
   want this tool, so a backwards jump un-fires the alerts it crossed. A real-time
   cooldown stops a tight reload loop from machine-gunning the same alert.
@@ -180,15 +183,16 @@ switch looks like one of the moves above:
 
 | The save you load is… | What happens |
 |---|---|
-| Earlier, within about a year | A reload: its upcoming intakes are re-armed at once. |
-| More than about a year away, either way | About twenty seconds of "Ignored implausible jump", then it switches. Nothing is reported for the gap; windows open in that save right now are. |
-| One you switched away from this session | The same, and it picks up where that save was left: nothing already alerted in it is repeated. |
+| Earlier, within about a year | A reload: its upcoming intakes are re-armed at once. One almost exactly a season earlier (the same date, give or take a week) looks like a misread year, so it waits about twenty seconds first; pressing Continue meanwhile loses nothing. |
+| More than about a year away, either way | About twenty seconds of "Ignored implausible jump", then it switches. Nothing is reported for the gap; windows open in that save right now are announced. |
+| The one you most recently switched away from | The same, and it picks up where that save was left, as long as it is no more than about two months (in game) past that point: nothing already alerted in it is repeated. Only the most recent one is remembered, and **Reset date** forgets it. |
 | Later, within about a year | Indistinguishable from a holiday, so every intake in between is reported as missed. |
 | Any, after restarting the app | The date saved last time is only trusted once it is seen on screen. If the save on screen is more than a year away, it switches at once. |
 
-For the last row but one, or whenever you want a clean start, press **Reset
-date** in the header after loading the save. The app forgets the tracked date
-and adopts the next one it reads, without reporting the gap.
+For the "later, within about a year" row, or whenever you want a clean start,
+press **Reset date** in the header after loading the save. The app forgets the
+tracked date and adopts the next one it reads without reporting the gap, and
+announces any intake window open at that date.
 
 ---
 
@@ -312,7 +316,8 @@ the clock, or the year is being misread: check the preview and work through the
 
 A save up to about a year later than the one being tracked looks exactly like a
 holiday, and a holiday is supposed to report every window it skipped. Press
-**Reset date** after loading a different save to start fresh instead. See
+**Reset date** after loading a different save to start fresh instead: the gap is
+not reported, and windows open in that save are. See
 [Switching between saves](#switching-between-saves).
 
 ### "Football Manager is not running" while it is plainly running

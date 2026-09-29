@@ -19,8 +19,16 @@ public sealed record TrackerState
     /// save, or the file may hold a misread from an earlier session, so the first
     /// confirmed reading that disagrees with it by more than the jump ceiling wins
     /// at once instead of waiting out <see cref="TrackerConfig.ResyncConfirmations"/>.
+    /// A reading held back only for its misread-year shape still waits.
     /// </summary>
     public bool Unconfirmed { get; init; }
+
+    /// <summary>
+    /// Announce windows already open when the next date is adopted. Set by
+    /// <see cref="AfterReset"/>: a player who resets has just switched saves on
+    /// purpose, and should hear about them exactly as an automatic switch would.
+    /// </summary>
+    public bool AnnounceOpenWindows { get; init; }
 
     /// <summary>A date seen but not yet confirmed. See <c>TrackerConfig.ConfirmSamples</c>.</summary>
     public DateOnly? Pending { get; init; }
@@ -48,15 +56,23 @@ public sealed record TrackerState
     /// one save, then go back to the other. Remembering where that timeline was
     /// left, and what it had already alerted, lets the return pick up from there
     /// instead of starting blind, so what it crossed in the meantime is reported
-    /// once and nothing already alerted is repeated.
+    /// once and nothing already alerted is repeated. Only the most recent one is
+    /// kept.
     /// </remarks>
     public Timeline? Abandoned { get; init; }
 
     public static readonly TrackerState Initial = new();
+
+    /// <summary>The state <c>Reset date</c> leaves: nothing known, open windows announced on adoption.</summary>
+    public static readonly TrackerState AfterReset = new() { AnnounceOpenWindows = true };
 }
 
 /// <summary>A committed date and the alerts given on the way to it.</summary>
-public sealed record Timeline(DateOnly LastSeen, ImmutableHashSet<TriggerKey> Fired);
+/// <param name="Restored">
+/// The date came from state.json and was never seen on screen, so the game may
+/// have been played on past it while the app was closed.
+/// </param>
+public sealed record Timeline(DateOnly LastSeen, ImmutableHashSet<TriggerKey> Fired, bool Restored = false);
 
 /// <summary>
 /// A second timeline, built from readings the jump ceiling refused.
@@ -118,6 +134,17 @@ public sealed record TrackerConfig
     /// case, a holiday of about a year, just waits out a re-sync.
     /// </remarks>
     public int YearMisreadToleranceDays { get; init; } = 7;
+
+    /// <summary>
+    /// How far past where it was left a timeline can be picked up again by a
+    /// re-sync coming back to it (see <see cref="TrackerState.Abandoned"/>).
+    /// </summary>
+    /// <remarks>
+    /// Room for the clock to keep moving while a misread holds the tracked date,
+    /// but no more: a different save a few months on is not a return, and picking
+    /// up from the old date would report every intake in between as missed.
+    /// </remarks>
+    public int ReturnWindowDays { get; init; } = 60;
 
     /// <summary>
     /// How many confirmed readings the jump ceiling refused, consistent with each

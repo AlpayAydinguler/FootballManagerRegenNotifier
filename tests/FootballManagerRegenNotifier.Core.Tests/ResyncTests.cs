@@ -98,11 +98,12 @@ public class ResyncTests
     // ------------------------------------------------- a misread that held and lost
 
     [Fact]
-    public void MisreadYearOnAnIntakeDay_ThereAndBack_AlertsOnce()
+    public void MisreadYearOnAnIntakeDay_ThereAndBack_NeverRepeatsTheRealAlert()
     {
         // Sitting on England's opening day, already alerted; the year misreads as
-        // 2013 for long enough to win, then reads correctly again. Nothing about
-        // that is a new intake.
+        // 2013 for long enough to win, then reads correctly again. The misread
+        // day may be announced under 2013 - it is indistinguishable from loading
+        // a 2013 save on that day - but the real alert is not given twice.
         var tracker = Tracker(TestData.England);
         var events = new List<TrackerEvent>();
         var state = TestData.Commit(tracker, TrackerState.Initial, D(2025, 3, 13));
@@ -114,7 +115,9 @@ public class ResyncTests
         state = SwitchTo(tracker, state, D(2025, 3, 14), events);
 
         Assert.Equal(D(2025, 3, 14), state.LastSeen);
-        Assert.Single(events.Alerts());
+        var alerts = events.Alerts();
+        Assert.Single(alerts, a => a.Trigger!.Key.OccurrenceYear == 2025);
+        Assert.True(alerts.Count <= 2);
     }
 
     [Fact]
@@ -137,11 +140,12 @@ public class ResyncTests
     }
 
     [Fact]
-    public void MisreadYearThatKeepsUpWithTheClock_AlertsOnTheRightDayAndOnlyOnce()
+    public void MisreadYearThatKeepsUpWithTheClock_AlertsOnTheRightDayAndOnceMoreWithTheRightYear()
     {
         // A misread that sticks while play continues still sees the right day and
-        // month, so the intake fires on the right day with the wrong year. Coming
-        // back must not announce it a second time.
+        // month, so the intake fires on the right day under the wrong year. When
+        // the real date comes back it is picked up from where it was left, and the
+        // intake is reported once more, correctly labelled. Never lost.
         var tracker = Tracker(TestData.England);
         var state = TestData.Commit(tracker, TrackerState.Initial, D(2025, 3, 10));
         state = SwitchTo(tracker, state, D(2013, 3, 10));
@@ -153,7 +157,9 @@ public class ResyncTests
         state = SwitchTo(tracker, state, D(2025, 3, 16), events);
 
         Assert.Equal(D(2025, 3, 16), state.LastSeen);
-        Assert.Single(events.Alerts());
+        var corrected = Assert.Single(events.Alerts(), a => a.Trigger!.Key.OccurrenceYear == 2025);
+        Assert.Equal(TriggerTiming.Late, corrected.Timing);
+        Assert.Equal(2, events.Alerts().Count);
     }
 
     [Fact]
@@ -313,6 +319,129 @@ public class ResyncTests
         Assert.Contains(events, e => e.Kind == TrackerEventKind.TriggersReArmed);
     }
 
+    [Fact]
+    public void LoadingASaveAboutAYearEarlier_ThenContinue_ReportsTheIntakeCrossed()
+    {
+        // A save one season back lands on the misread-year shape and is held. The
+        // Continue clicks walk out of that shape within a week; they must count
+        // towards the held save, not be committed against the old date, or the
+        // intake crossed in that week is skipped for good.
+        var tracker = Tracker(TestData.England);
+        var state = TestData.Commit(tracker, TrackerState.Initial, D(2026, 3, 10));
+
+        var events = new List<TrackerEvent>();
+        DateOnly[] clicks = [D(2025, 3, 9), D(2025, 3, 11), D(2025, 3, 13), D(2025, 3, 15), D(2025, 3, 17), D(2025, 3, 18), D(2025, 3, 20)];
+        foreach (var d in clicks) state = TestData.Commit(tracker, state, d, sink: events);
+        for (int i = clicks.Length; i < tracker.Config.ResyncConfirmations; i++)
+        {
+            state = TestData.Commit(tracker, state, D(2025, 3, 20), sink: events);
+        }
+
+        Assert.Equal(D(2025, 3, 20), state.LastSeen);
+        var alert = Assert.Single(events.Alerts());
+        Assert.Equal(new TriggerKey("ENG", 2025, TriggerKind.WindowOpen), alert.Trigger!.Key);
+        Assert.Equal(TriggerTiming.Late, alert.Timing);
+    }
+
+    [Fact]
+    public void SavesAtTheSameTimeOfYear_EachAnnouncesItsOwnOpenWindowAndNothingRepeats()
+    {
+        // Two careers sitting in March of different years. That looks exactly like
+        // a misread year, but alerts must not leak from one to the other: the
+        // second save's open window is its own, and must be announced.
+        var tracker = Tracker(TestData.England);
+        var events = new List<TrackerEvent>();
+        var state = TestData.Commit(tracker, TrackerState.Initial, D(2026, 3, 10));
+        state = TestData.Commit(tracker, state, D(2026, 3, 20), sink: events);
+
+        state = SwitchTo(tracker, state, D(2031, 3, 18), events);
+        state = SwitchTo(tracker, state, D(2026, 3, 20), events);
+
+        Assert.Equal(D(2026, 3, 20), state.LastSeen);
+        Assert.Equal(["ENG:2026:WindowOpen", "ENG:2031:WindowOpen"], events.Alerts().Select(a => a.Trigger!.Key.ToString()));
+    }
+
+    [Fact]
+    public void OnlyTheMostRecentSaveIsPickedUp_AnUnrelatedLaterSaveStartsFresh()
+    {
+        // Save A, then a long save B, then an unrelated save C a few months after
+        // where A was left. C must not be treated as A played on, which would
+        // report every intake in between as missed.
+        var tracker = Tracker(TestData.England, TestData.Brazil, TestData.Mexico);
+        var state = TestData.Commit(tracker, TrackerState.Initial, D(2025, 8, 1));
+        state = SwitchTo(tracker, state, D(2031, 6, 1));
+        state = TestData.Commit(tracker, state, D(2031, 6, 20));
+
+        var events = new List<TrackerEvent>();
+        state = SwitchTo(tracker, state, D(2026, 6, 1), events);
+
+        Assert.Equal(D(2026, 6, 1), state.LastSeen);
+        Assert.Empty(events.Alerts());
+    }
+
+    [Fact]
+    public void StartupMisread_AfterPlayingOnWithTheAppClosed_LosesNothing()
+    {
+        // state.json says 1 March; the game was played on to 2 April without the
+        // app. The first two readings after launch misread the year, and win at
+        // once because the saved date is unconfirmed. When the real date comes back
+        // it must still report what was crossed while the app was closed.
+        var rules = new[] { TestData.England, TestData.Mexico, TestData.Brazil };
+        var saved = new RuntimeState { LastSeenInGameDate = D(2025, 3, 1) };
+
+        var control = new List<TrackerEvent>();
+        TestData.Commit(Tracker(rules), SettingsStore.ToTrackerState(saved), D(2025, 4, 2), sink: control);
+
+        var tracker = Tracker(rules);
+        var events = new List<TrackerEvent>();
+        var state = TestData.Commit(tracker, SettingsStore.ToTrackerState(saved), D(2013, 4, 2), sink: events);
+        Assert.Equal(D(2013, 4, 2), state.LastSeen);
+        state = SwitchTo(tracker, state, D(2025, 4, 2), events);
+
+        Assert.Equal(D(2025, 4, 2), state.LastSeen);
+        var expected = control.Alerts().Select(a => a.Trigger!.Key).ToHashSet();
+        Assert.NotEmpty(expected);
+        Assert.Subset(events.Alerts().Select(a => a.Trigger!.Key).ToHashSet(), expected);
+    }
+
+    [Fact]
+    public void SavedDate_OneYearMisreadAsTheFirstReading_DoesNotFireAYear()
+    {
+        // The fast path for a saved date is for a different save, beyond the
+        // ceiling. Two samples of 2026 while the game shows 2025 must not be
+        // believed at once and replayed as a year-long holiday.
+        var tracker = Tracker(TestData.England, TestData.Brazil, TestData.Mexico, TestData.SwedenLowerLeagues);
+        var restored = SettingsStore.ToTrackerState(new RuntimeState { LastSeenInGameDate = D(2025, 3, 10) });
+
+        var events = new List<TrackerEvent>();
+        var state = TestData.Commit(tracker, restored, D(2026, 3, 10), sink: events);
+        state = tracker.Step(state, TestData.Good(2025, 3, 10), _ => true).State;
+
+        Assert.Equal(D(2025, 3, 10), state.LastSeen);
+        Assert.Empty(events.Alerts());
+    }
+
+    [Fact]
+    public void ResetDate_ThenASaveInsideAnOpenWindow_AnnouncesIt()
+    {
+        var tracker = Tracker(TestData.England, TestData.Brazil);
+
+        var events = new List<TrackerEvent>();
+        TestData.Commit(tracker, TrackerState.AfterReset, D(2026, 3, 20), sink: events);
+        var alert = Assert.Single(events.Alerts());
+        Assert.Equal(new TriggerKey("ENG", 2026, TriggerKind.WindowOpen), alert.Trigger!.Key);
+        Assert.Equal(TriggerTiming.Late, alert.Timing);
+
+        var openingDay = new List<TrackerEvent>();
+        TestData.Commit(tracker, TrackerState.AfterReset, D(2026, 3, 14), sink: openingDay);
+        Assert.Equal(TriggerTiming.OnTime, Assert.Single(openingDay.Alerts()).Timing);
+
+        // A first-ever launch keeps its contract: adopt silently.
+        var firstLaunch = new List<TrackerEvent>();
+        TestData.Commit(tracker, TrackerState.Initial, D(2026, 3, 20), sink: firstLaunch);
+        Assert.Empty(firstLaunch.Alerts());
+    }
+
     // ------------------------------------------------------------ garbage years
 
     [Fact]
@@ -417,19 +546,22 @@ public class ResyncTests
         }
     }
 
-    public enum Origin { Fresh, Held, YearShift, Return }
+    public enum Origin { Fresh, Held, Return, Stale, RestoredReturn }
 
     [Theory]
     [InlineData(Origin.Fresh)]
     [InlineData(Origin.Held)]
-    [InlineData(Origin.YearShift)]
     [InlineData(Origin.Return)]
-    public void Property_AResyncIsExactlyAPlainTrackerRunFromItsOrigin(Origin kind)
+    [InlineData(Origin.Stale)]
+    [InlineData(Origin.RestoredReturn)]
+    public void Property_AResyncIsExactlyAPlainTrackerRunFromWhereItShouldCarryOn(Origin kind)
     {
         // A re-sync claims to replay the candidate's readings from an origin as
         // Advance and Regress would have. Check that against a tracker with no
-        // ceiling at all, started at that origin and fed the same readings. The
-        // only difference allowed is announcing windows already open on arrival.
+        // ceiling at all, fed the same readings from where the scenario says the
+        // new timeline really carries on: the save's own state when coming back
+        // to it, the committed state for a held reading, nothing for a new save.
+        // The only extra alerts allowed are windows already open on arrival.
         var calendar = new TriggerCalendar(AllRules, leadDays: 3);
         var tracker = new DateTracker(calendar);
         var plain = new DateTracker(calendar, new TrackerConfig { MaxJumpDays = int.MaxValue, YearMisreadToleranceDays = -1 });
@@ -440,57 +572,97 @@ public class ResyncTests
             var rng = new Random(seed * 7919 + (int)kind);
             var home = D(2026, 1, 1).AddDays(rng.Next(0, 365));
 
-            var state = TestData.Commit(tracker, TrackerState.Initial, home.AddDays(-rng.Next(30, 300)), armed);
-            state = TestData.Commit(tracker, state, home, armed);
-            var homeState = state;
+            TrackerState state;
+            if (kind == Origin.RestoredReturn)
+            {
+                var fired = TestData.Commit(tracker, TestData.Commit(tracker, TrackerState.Initial, home.AddDays(-200)), home).Fired;
+                state = SettingsStore.ToTrackerState(new RuntimeState
+                {
+                    LastSeenInGameDate = home,
+                    FiredTriggerKeys = [.. fired.Select(k => k.ToString())],
+                });
+            }
+            else
+            {
+                state = TestData.Commit(tracker, TrackerState.Initial, home.AddDays(-rng.Next(30, 300)), armed);
+                state = TestData.Commit(tracker, state, home, armed);
+            }
+            var homeState = new TrackerState { LastSeen = home, Fired = state.Fired };
+
+            // Another save, far away and played on for a while across intakes.
+            // Sometimes at the same time of year, which looks like a misread year.
+            DateOnly Away() => rng.Next(2) == 0
+                ? D(home.Year + rng.Next(3, 12), home.Month, Math.Min(home.Day, 28)).AddDays(rng.Next(-10, 11))
+                : home.AddDays(rng.Next(2000, 4000));
 
             TrackerState origin;
             DateOnly first;
-            DateOnly heldAround = default;
             switch (kind)
             {
                 case Origin.Held:
                     int year = home.Year + (rng.Next(2) == 0 ? 1 : -1);
-                    heldAround = D(year, home.Month, Math.Min(home.Day, DateTime.DaysInMonth(year, home.Month)));
-                    first = heldAround.AddDays(rng.Next(-3, 4));
-                    origin = new TrackerState { LastSeen = home, Fired = state.Fired };
+                    first = D(year, home.Month, Math.Min(home.Day, DateTime.DaysInMonth(year, home.Month))).AddDays(rng.Next(-3, 4));
+                    origin = homeState;
                     break;
-                case Origin.YearShift:
-                    int years = rng.Next(2, 20) * (rng.Next(2) == 0 ? 1 : -1);
-                    var shifted = D(home.Year + years, home.Month, Math.Min(home.Day, DateTime.DaysInMonth(home.Year + years, home.Month)));
-                    first = shifted.AddDays(rng.Next(-3, 4));
-                    origin = new TrackerState
-                    {
-                        LastSeen = shifted,
-                        Fired = [.. state.Fired.Select(k => k with { OccurrenceYear = k.OccurrenceYear + years })],
-                    };
-                    break;
+
                 case Origin.Return:
-                    state = SwitchTo(tracker, state, home.AddDays(3000 + rng.Next(0, 200)));
-                    first = home.AddDays(rng.Next(-40, 60));
-                    origin = new TrackerState { LastSeen = home, Fired = homeState.Fired };
+                case Origin.Stale:
+                    var away = Away();
+                    state = SwitchTo(tracker, state, away);
+                    for (int i = rng.Next(0, 6); i > 0; i--) state = TestData.Commit(tracker, state, state.LastSeen!.Value.AddDays(rng.Next(1, 20)), armed);
+                    if (kind == Origin.Return)
+                    {
+                        first = home.AddDays(rng.Next(-60, tracker.Config.ReturnWindowDays + 1));
+                        origin = homeState;
+                    }
+                    else
+                    {
+                        do first = home.AddDays(rng.Next(tracker.Config.ReturnWindowDays + 1, tracker.Config.MaxJumpDays));
+                        while (Math.Abs(first.DayNumber - state.LastSeen!.Value.DayNumber) <= tracker.Config.MaxJumpDays);
+                        origin = new TrackerState { LastSeen = first.AddDays(-1) };
+                    }
                     break;
+
+                case Origin.RestoredReturn:
+                    // A misread at launch wins at once; then the real date, which the
+                    // game was played on to while the app was closed.
+                    state = TestData.Commit(tracker, state, D(home.Year - rng.Next(5, 15), 6, 15));
+                    first = home.AddDays(rng.Next(0, 300));
+                    origin = homeState;
+                    break;
+
                 default:
-                    // Clear of the same time of year, or it is a year shift instead.
-                    do first = home.AddDays(2000 + rng.Next(0, 2000));
-                    while (NearSameDateInAnotherYear(first, home));
+                    if (rng.Next(2) == 0)
+                    {
+                        // Leave an unrelated save behind, so there is a remembered
+                        // timeline that the candidate must not be mistaken for.
+                        state = SwitchTo(tracker, state, Away());
+                    }
+                    do first = home.AddDays(rng.Next(2000, 4000));
+                    while (Math.Abs(first.DayNumber - state.LastSeen!.Value.DayNumber) <= tracker.Config.MaxJumpDays
+                           || Math.Abs(first.DayNumber - home.DayNumber) <= tracker.Config.MaxJumpDays);
                     origin = new TrackerState { LastSeen = first.AddDays(-1) };
                     break;
             }
 
-            // The candidate's own moves: small steps, some reloads, and for a
-            // candidate held only for its shape, never far enough to lose it.
+            // The candidate's own moves: small steps and some reloads. A reading
+            // held only for its shape stays inside that shape; the others stay
+            // clear of the committed date.
             var readings = new List<DateOnly> { first };
             while (readings.Count < tracker.Config.ResyncConfirmations)
             {
                 var last = readings[^1];
                 readings.Add(kind == Origin.Held
-                    ? heldAround.AddDays(rng.Next(-3, 4))
+                    ? readings[0].AddDays(rng.Next(-3, 4))
                     : rng.Next(4) == 0 ? last.AddDays(-rng.Next(1, 30)) : last.AddDays(rng.Next(0, 9)));
             }
 
             var ours = new List<TrackerEvent>();
-            foreach (var d in readings) state = TestData.Commit(tracker, state, d, armed, ours);
+            foreach (var d in readings)
+            {
+                state = TestData.Commit(tracker, state, d, armed, ours);
+                if (state.LastSeen == d && ours.Exists(e => e.Kind == TrackerEventKind.ClockResynced)) break;
+            }
 
             var reference = new List<TrackerEvent>();
             var expected = origin;
@@ -501,12 +673,15 @@ public class ResyncTests
             string marker = kind switch
             {
                 Origin.Held => "It looked like a misread year",
-                Origin.YearShift => "Only the year differs",
-                Origin.Return => "Picking up from",
+                Origin.Return or Origin.RestoredReturn => "Picking up from",
                 _ => "was a misread or a different save",
             };
             Assert.True(resync.Message.Contains(marker, StringComparison.Ordinal), $"{kind} seed {seed}: took another path: {resync.Message}");
             Assert.Equal(readings[^1], state.LastSeen);
+
+            // Only what happened since the switch: the reference replays the
+            // candidate, not whatever the tracker did before it.
+            ours = ours.GetRange(ours.IndexOf(resync), ours.Count - ours.IndexOf(resync));
 
             var floor = readings.Append(origin.LastSeen!.Value).Min();
             var extra = state.Fired.Except(expected.Fired);
@@ -514,10 +689,8 @@ public class ResyncTests
             foreach (var key in extra)
             {
                 var t = calendar.Materialise([key.OccurrenceYear]).Single(m => m.Key == key);
-                Assert.True(t.Key.Kind == TriggerKind.WindowOpen && t.FireOn <= floor && t.TimingAt(readings[^1]) == TriggerTiming.Late,
-                    $"{kind} seed {seed}: unexpected {key} fireOn={t.FireOn} close={t.WindowClose} floor={floor} "
-                    + $"latest={readings[^1]} origin={origin.LastSeen} readings={string.Join(" ", readings)} "
-                    + $"events={string.Join(" | ", ours.Where(e => e.Kind is TrackerEventKind.ClockResynced or TrackerEventKind.AlertRaised).Select(e => e.Message))}");
+                Assert.True(t.Key.Kind == TriggerKind.WindowOpen && t.FireOn <= floor && readings[^1] <= t.WindowClose,
+                    $"{kind} seed {seed}: unexpected {key}");
             }
 
             var ourAlerts = ours.Alerts().Select(a => a.Trigger!.Key).ToHashSet();

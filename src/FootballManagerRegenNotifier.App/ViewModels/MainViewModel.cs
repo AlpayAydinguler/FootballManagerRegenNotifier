@@ -708,7 +708,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         await _monitor.ResetTrackingAsync().ConfigureAwait(true);
         LastSeenDate = "–";
         Log.Add(LogSeverity.Info,
-            "Forgot the tracked date. The next date read is adopted as a fresh start, with nothing alerted for the gap.");
+            "Forgot the tracked date. The next date read is adopted as a fresh start: nothing is alerted for the gap, and intake windows open at that date are announced.");
         PersistState();
         UpdateNextIntake();
     }
