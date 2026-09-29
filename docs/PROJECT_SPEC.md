@@ -251,8 +251,11 @@ intake crossed during the wait is reported late rather than lost. A confirmed
 reading that carries on from the candidate (closer to it than to `lastSeen`, and
 at most 60 days past it) counts towards the candidate instead of being committed:
 a save loaded a year back walks out of the misread-year shape within a week of
-Continue clicks. A reading in the misread-year shape against the candidate starts
-a new candidate rather than extending it. The origin is the first of:
+Continue clicks. Likewise only a reading that carries on from the candidate (at
+most 60 days past it, or a reload back within the ceiling, and not in the
+misread-year shape) extends it; anything else starts a new candidate, so a save
+shown for a few seconds by mistake is not merged with the one loaded after it.
+The origin is the first of:
 
 1. the timeline the last re-sync left, with its alerts, when the candidate comes
    back to it: anywhere from `MAX_JUMP` before where it was left to 60 days after,

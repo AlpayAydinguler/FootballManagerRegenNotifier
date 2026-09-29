@@ -154,7 +154,7 @@ public sealed class DateTracker(TriggerCalendar calendar, TrackerConfig? config 
         // save, and merged in it would replay every intake in between.
         if (state.Candidate is { } held
             && Math.Abs(current.DayNumber - held.Latest.DayNumber) < Math.Abs(delta)
-            && current.DayNumber - held.Latest.DayNumber <= _config.ReturnWindowDays)
+            && CarriesOn(held.Latest, current))
         {
             return Quarantine(state, previous, current, isArmed);
         }
@@ -198,11 +198,12 @@ public sealed class DateTracker(TriggerCalendar calendar, TrackerConfig? config 
     /// </remarks>
     private StepResult Quarantine(TrackerState state, DateOnly previous, DateOnly current, Func<CountryRule, bool> isArmed)
     {
-        // A reading in the misread-year shape against the candidate starts a new
-        // one rather than extending it: extended, two samples of a misread digit
-        // would drag the floor back a year and replay that year on switching.
+        // Only a reading that carries on from the candidate extends it; anything
+        // else starts a new one. Extended by a save loaded months later, a save
+        // shown for a few seconds by mistake would replay every intake between
+        // the two; by a misread digit, it would drag the floor back a year.
         var existing = state.Candidate is { } c
-                       && Math.Abs(current.DayNumber - c.Latest.DayNumber) <= _config.MaxJumpDays
+                       && CarriesOn(c.Latest, current)
                        && YearsShifted(c.Latest, current) is null
             ? c
             : null;
@@ -332,6 +333,23 @@ public sealed class DateTracker(TriggerCalendar calendar, TrackerConfig? config 
             Unconfirmed = false,
             Abandoned = new Timeline(previous, state.Fired, Restored: state.Unconfirmed),
         }, events);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="to"/> can be the same timeline as
+    /// <paramref name="from"/> moved on: a short step forward, or a reload back
+    /// anywhere within the ceiling.
+    /// </summary>
+    /// <remarks>
+    /// Backwards is safe to accept broadly, because a reload only re-arms. Forwards
+    /// is not: treated as the same timeline, a jump of months is replayed as a
+    /// holiday and reports every intake in it as missed, which is wrong whenever
+    /// it is really a different save.
+    /// </remarks>
+    private bool CarriesOn(DateOnly from, DateOnly to)
+    {
+        int step = to.DayNumber - from.DayNumber;
+        return step >= -_config.MaxJumpDays && step <= _config.ReturnWindowDays;
     }
 
     /// <summary>

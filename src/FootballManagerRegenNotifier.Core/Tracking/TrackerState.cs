@@ -138,8 +138,9 @@ public sealed record TrackerConfig
     /// <summary>
     /// How far the clock can move on from a timeline and still be taken as that
     /// timeline carrying on: when a re-sync comes back to one it left (see
-    /// <see cref="TrackerState.Abandoned"/>), and when a reading close to the
-    /// committed date is counted towards a candidate instead.
+    /// <see cref="TrackerState.Abandoned"/>), and when a reading extends a
+    /// candidate, including one close to the committed date that is counted
+    /// towards the candidate instead.
     /// </summary>
     /// <remarks>
     /// Room for the clock to keep moving while a misread holds the tracked date,
@@ -159,8 +160,9 @@ public sealed record TrackerConfig
     /// misread has to be all the app sees for that whole time; short enough that
     /// loading a save in another year does not look like the app has died. The
     /// count starts again on a single read of the committed date, on a confirmed
-    /// reading close to it, and on a refused reading too far from the candidate or
-    /// in the misread-year shape against it.
+    /// reading close to it, and on a refused reading that does not carry on from
+    /// the candidate (more than <see cref="ReturnWindowDays"/> past it, beyond the
+    /// ceiling before it, or in the misread-year shape against it).
     /// </remarks>
     public int ResyncConfirmations { get; init; } = 10;
 

@@ -527,6 +527,47 @@ public class ResyncTests
         Assert.False(SettingsStore.ToTrackerState(SettingsStore.FromTrackerState(state, null)).AnnounceOpenWindows);
     }
 
+    [Fact]
+    public void AWrongFarSaveForAFewSeconds_ThenTheOneWanted_ReportsOnlyItsOwnOpenWindows()
+    {
+        // Tracking a 2028 save; a 2025 save is loaded by mistake and shown for a few
+        // seconds; then the 2026 save that was wanted. The wrong one must not be
+        // taken for the wanted one's past, which would replay ten months of intakes.
+        var rules = new[] { TestData.England, TestData.Brazil, TestData.Mexico, TestData.SwedenLowerLeagues };
+
+        List<string> Run(bool mistake)
+        {
+            var tracker = Tracker(rules);
+            var events = new List<TrackerEvent>();
+            var state = TestData.Commit(tracker, TrackerState.Initial, D(2028, 12, 29));
+            if (mistake)
+            {
+                for (int i = 0; i < 3; i++) state = TestData.Commit(tracker, state, D(2025, 7, 1), sink: events);
+            }
+            state = SwitchTo(tracker, state, D(2026, 3, 20), events);
+            Assert.Equal(D(2026, 3, 20), state.LastSeen);
+            return [.. events.Alerts().Select(a => a.Trigger!.Key.ToString())];
+        }
+
+        Assert.Equal(Run(mistake: false), Run(mistake: true));
+    }
+
+    [Fact]
+    public void AWrongSaveForAFewSeconds_ThenBackToTheSaveLeft_RepeatsNothing()
+    {
+        var tracker = Tracker(TestData.England, TestData.Brazil, TestData.Mexico);
+        var state = TestData.Commit(tracker, TrackerState.Initial, D(2026, 3, 1));
+        state = TestData.Commit(tracker, state, D(2026, 4, 29));
+        state = SwitchTo(tracker, state, D(2028, 12, 29));
+
+        var events = new List<TrackerEvent>();
+        for (int i = 0; i < 3; i++) state = TestData.Commit(tracker, state, D(2025, 7, 1), sink: events);
+        state = SwitchTo(tracker, state, D(2026, 4, 29), events);
+
+        Assert.Equal(D(2026, 4, 29), state.LastSeen);
+        Assert.Empty(events.Alerts());
+    }
+
     // ------------------------------------------------------------ garbage years
 
     [Fact]
