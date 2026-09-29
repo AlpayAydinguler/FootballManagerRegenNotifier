@@ -134,8 +134,9 @@ public class DateTrackerTests
         var state = TestData.Commit(tracker, TrackerState.Initial, new DateOnly(2026, 1, 1));
 
         var events = new List<TrackerEvent>();
-        // 360 days: crosses March 2026 only (March 2027 is beyond).
-        TestData.Commit(tracker, state, new DateOnly(2026, 12, 27), sink: events);
+        // 348 days: crosses March 2026 only (March 2027 is beyond). Kept clear of
+        // a whole year, which lands on the misread-year shape and is held back.
+        TestData.Commit(tracker, state, new DateOnly(2026, 12, 15), sink: events);
 
         var alert = Assert.Single(events.Alerts());
         Assert.Equal(2026, alert.Trigger!.Key.OccurrenceYear);
@@ -545,6 +546,7 @@ public class DateTrackerTests
         state = TestData.Commit(tracker, state, new DateOnly(2026, 3, 14), sink: first);
         Assert.Single(first.Alerts());
 
+        state = TestData.Commit(tracker, state, new DateOnly(2026, 12, 1));
         state = TestData.Commit(tracker, state, new DateOnly(2027, 3, 13));
 
         var second = new List<TrackerEvent>();

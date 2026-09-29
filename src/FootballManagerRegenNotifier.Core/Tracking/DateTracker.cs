@@ -75,7 +75,8 @@ public sealed class DateTracker(TriggerCalendar calendar, TrackerConfig? config 
         // any re-sync candidate: the committed date is evidently still on screen.
         if (state.LastSeen == date)
         {
-            return new StepResult(state with { Pending = null, PendingCount = 0, Candidate = null }, []);
+            return new StepResult(
+                state with { Pending = null, PendingCount = 0, Candidate = null, Unconfirmed = false }, []);
         }
 
         // Commit-on-confirm.
@@ -110,11 +111,16 @@ public sealed class DateTracker(TriggerCalendar calendar, TrackerConfig? config 
 
         // Checked before the direction, and in both directions. A year misread as
         // 2013 used to go through as a save reload, get committed, and then turn
-        // every correct reading afterwards into an implausible forward jump.
-        if (Math.Abs(delta) > _config.MaxJumpDays) return Quarantine(state, previous, current, isArmed);
+        // every correct reading afterwards into an implausible forward jump. A
+        // year misread by one (2025 as 2026) is inside the ceiling, so its shape
+        // is checked as well.
+        if (Math.Abs(delta) > _config.MaxJumpDays || YearsShifted(previous, current) is not null)
+        {
+            return Quarantine(state, previous, current, isArmed);
+        }
 
         // A plausible reading means the committed timeline is alive.
-        state = state with { Candidate = null };
+        state = state with { Candidate = null, Unconfirmed = false };
 
         if (delta < 0) return Regress(state, previous, current);
 
@@ -153,19 +159,25 @@ public sealed class DateTracker(TriggerCalendar calendar, TrackerConfig? config 
     private StepResult Quarantine(TrackerState state, DateOnly previous, DateOnly current, Func<CountryRule, bool> isArmed)
     {
         var candidate = state.Candidate is { } c && Math.Abs(current.DayNumber - c.Latest.DayNumber) <= _config.MaxJumpDays
-            ? new ResyncCandidate(current < c.Since ? current : c.Since, current, c.Confirmations + 1)
-            : new ResyncCandidate(DayBefore(current), current, 1);
+            ? c with { Floor = current < c.Floor ? current : c.Floor, Latest = current, Confirmations = c.Confirmations + 1 }
+            : new ResyncCandidate(current, current, current, 1);
 
-        if (candidate.Confirmations >= _config.ResyncConfirmations)
+        // A date restored from disk was never seen this session, so it has not
+        // earned the benefit of the doubt: the game may simply be on another save.
+        int needed = state.Unconfirmed ? 1 : _config.ResyncConfirmations;
+        if (candidate.Confirmations >= needed)
         {
             return Resync(state, previous, candidate, isArmed);
         }
 
         int delta = current.DayNumber - previous.DayNumber;
+        string why = YearsShifted(previous, current) is not null
+            ? "it lands on the same date in another year, which is almost always a misread year"
+            : "likely a misread";
         return new StepResult(state with { Candidate = candidate }, [TrackerEvent.Info(
             TrackerEventKind.JumpQuarantined,
-            $"Ignored implausible jump {Fmt(previous)} to {Fmt(current)} ({delta} days). Likely a misread - "
-            + $"will switch to it if it keeps reading that way ({candidate.Confirmations}/{_config.ResyncConfirmations}).",
+            $"Ignored implausible jump {Fmt(previous)} to {Fmt(current)} ({delta} days): {why}. "
+            + $"Will switch to it if it keeps reading that way ({candidate.Confirmations}/{needed}).",
             current)]);
     }
 
@@ -173,33 +185,147 @@ public sealed class DateTracker(TriggerCalendar calendar, TrackerConfig? config 
     /// Abandons the committed date for a candidate that has outlasted it.
     /// </summary>
     /// <remarks>
-    /// The old <see cref="TrackerState.Fired"/> set belongs to the abandoned
-    /// timeline and is dropped: kept, a reload to an earlier season would leave
-    /// that season's intakes marked as already alerted. Its replacement is what
-    /// the candidate crossed while it was being confirmed, fired now, so that a
-    /// window which opened during the wait is reported late rather than lost.
+    /// <para>
+    /// The new timeline carries on from an origin, and the candidate's own moves
+    /// are replayed from there exactly as <see cref="Advance"/> and
+    /// <see cref="Regress"/> would have handled them: re-arm down to the lowest
+    /// date it visited, then fire everything from there to where it is now. So a
+    /// window that opened during the wait is reported late rather than lost. The
+    /// origin is, in order of preference:
+    /// </para>
+    /// <list type="bullet">
+    /// <item>The committed timeline itself, when the candidate is within the jump
+    /// ceiling of it and was held back only for its shape. That makes a holiday of
+    /// about a year come out exactly as it would have if accepted at once, only
+    /// later.</item>
+    /// <item>The committed date moved to the candidate's year, with its alerts, when
+    /// the two differ only by the year. Either one of them is a misread year or the
+    /// saves sit at the same time of year; carrying the alerts over is what stops a
+    /// misread year re-announcing an intake that was already alerted.</item>
+    /// <item>The timeline the last re-sync left, when the candidate is back near it.
+    /// A misread that won, or a save switched away from, is picked up again where it
+    /// was left, so the intakes it crossed meanwhile are reported once.</item>
+    /// <item>Otherwise the day before the candidate's first reading, with nothing
+    /// alerted: a genuinely new timeline, such as another save.</item>
+    /// </list>
+    /// <para>
+    /// The old <see cref="TrackerState.Fired"/> set is kept only as that origin
+    /// allows. Carried over unconditionally, a reload to an earlier season would
+    /// leave that season's intakes marked as already alerted. Windows that are
+    /// already open at the new date are announced unless the origin had alerted
+    /// them, because a re-sync must never leave an open window unmentioned.
+    /// </para>
     /// </remarks>
     private StepResult Resync(TrackerState state, DateOnly previous, ResyncCandidate candidate, Func<CountryRule, bool> isArmed)
     {
         var current = candidate.Latest;
+
+        Timeline origin;
+        string how;
+        if (Math.Abs(candidate.First.DayNumber - previous.DayNumber) <= _config.MaxJumpDays)
+        {
+            // Close enough to have been accepted, and held back only for looking
+            // like a misread year. Having held this long, it is a holiday or a
+            // reload of about a year, and is handled as one would have been.
+            origin = new Timeline(previous, state.Fired);
+            how = $"It looked like a misread year, but it has held, so it is treated as a move from {Fmt(previous)}.";
+        }
+        else if (YearsShifted(previous, candidate.First) is { } years)
+        {
+            origin = new Timeline(
+                ShiftYears(previous, years)!.Value,
+                [.. state.Fired.Select(k => k with { OccurrenceYear = k.OccurrenceYear + years })]);
+            how = $"Only the year differs from {Fmt(previous)}, so one of the two years was misread; alerts already given carry over.";
+        }
+        else if (state.Abandoned is { } back
+                 && Math.Abs(candidate.First.DayNumber - back.LastSeen.DayNumber) <= _config.MaxJumpDays)
+        {
+            origin = back;
+            how = $"Picking up from {Fmt(back.LastSeen)}, where this timeline was left; {Fmt(previous)} was a misread or another save.";
+        }
+        else
+        {
+            origin = new Timeline(DayBefore(candidate.First), []);
+            how = state.Unconfirmed
+                ? $"The saved date {Fmt(previous)} is not what is on screen: another save was loaded, or it was a misread."
+                : $"Either {Fmt(previous)} was a misread or a different save was loaded.";
+        }
+
         var events = new List<TrackerEvent>
         {
             TrackerEvent.Info(TrackerEventKind.ClockResynced,
-                $"Switched to {Fmt(current)} from {Fmt(previous)} after {candidate.Confirmations} consistent readings. "
-                + $"{Fmt(previous)} was probably a misread, or a different save was loaded.",
-                current),
+                $"Switched to {Fmt(current)} after {candidate.Confirmations} consistent reading(s). {how}", current),
         };
 
-        var fired = ImmutableHashSet<TriggerKey>.Empty;
-        foreach (var trigger in _calendar.Crossings(candidate.Since, current))
+        var floor = candidate.Floor < origin.LastSeen ? candidate.Floor : origin.LastSeen;
+        var fired = origin.Fired.Except(_calendar.Crossings(floor, origin.LastSeen).Select(t => t.Key));
+
+        foreach (var trigger in _calendar.Crossings(floor, current).Concat(StillOpen(current, floor)))
         {
             if (!isArmed(trigger.Rule)) continue;
+            if (fired.Contains(trigger.Key)) continue;
 
             fired = fired.Add(trigger.Key);
             events.Add(Alert(trigger, current));
         }
 
-        return new StepResult(state with { LastSeen = current, Fired = fired, Candidate = null }, events);
+        return new StepResult(state with
+        {
+            LastSeen = current,
+            Fired = fired,
+            Candidate = null,
+            Unconfirmed = false,
+            Abandoned = new Timeline(previous, state.Fired),
+        }, events);
+    }
+
+    /// <summary>
+    /// Windows open on <paramref name="at"/> that opened on or before
+    /// <paramref name="openedBy"/>, which is where a crossing test stops seeing them.
+    /// </summary>
+    private IEnumerable<MaterialisedTrigger> StillOpen(DateOnly at, DateOnly openedBy) =>
+        _calendar.Materialise([at.Year - 1, at.Year])
+            .Where(t => t.Key.Kind == TriggerKind.WindowOpen
+                        && t.FireOn <= openedBy
+                        && t.TimingAt(at) == TriggerTiming.Late)
+            .OrderBy(t => t.FireOn)
+            .ThenBy(t => t.Key.CountryCode, StringComparer.Ordinal);
+
+    /// <summary>
+    /// Whole years that <paramref name="to"/> is away from <paramref name="from"/>'s
+    /// calendar date, when that is the best explanation of the jump; null otherwise.
+    /// </summary>
+    /// <remarks>
+    /// The neighbouring year counts too, so a misread landing just across
+    /// 1 January is still recognised. Zero years never counts: that is ordinary
+    /// play, and it wins whenever it is the closer fit.
+    /// </remarks>
+    private int? YearsShifted(DateOnly from, DateOnly to)
+    {
+        int years = to.Year - from.Year;
+        int? best = null;
+        int bestGap = int.MaxValue;
+        for (int k = years - 1; k <= years + 1; k++)
+        {
+            if (ShiftYears(from, k) is not { } shifted) continue;
+
+            int gap = Math.Abs(to.DayNumber - shifted.DayNumber);
+            if (gap < bestGap)
+            {
+                best = k;
+                bestGap = gap;
+            }
+        }
+
+        return best is { } b && b != 0 && bestGap <= _config.YearMisreadToleranceDays ? b : null;
+    }
+
+    /// <summary>The same calendar date <paramref name="years"/> away; 29 February becomes the 28th.</summary>
+    private static DateOnly? ShiftYears(DateOnly date, int years)
+    {
+        int year = date.Year + years;
+        if (year < DateOnly.MinValue.Year || year > DateOnly.MaxValue.Year) return null;
+        return new DateOnly(year, date.Month, Math.Min(date.Day, DateTime.DaysInMonth(year, date.Month)));
     }
 
     /// <summary>

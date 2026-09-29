@@ -137,6 +137,9 @@ public sealed class SettingsStore
         return new TrackerState
         {
             LastSeen = state.LastSeenInGameDate,
+            // A saved date may belong to another save, or be a misread from an
+            // earlier version; it has to be seen on screen before it is trusted.
+            Unconfirmed = state.LastSeenInGameDate is not null,
             Fired = [.. fired],
         };
     }
