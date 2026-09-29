@@ -643,6 +643,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             TrackerEventKind.SampleRejected => LogSeverity.Detail,
             TrackerEventKind.AwaitingConfirmation => LogSeverity.Detail,
             TrackerEventKind.ClockRegressed => LogSeverity.Warning,
+            TrackerEventKind.ClockResynced => LogSeverity.Warning,
             TrackerEventKind.TriggersReArmed => LogSeverity.Success,
             TrackerEventKind.DateAdopted => LogSeverity.Success,
             _ => LogSeverity.Info,

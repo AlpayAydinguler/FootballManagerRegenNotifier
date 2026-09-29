@@ -13,6 +13,7 @@ public enum TrackerEventKind
     SampleRejected,
     AwaitingConfirmation,
     AlertRaised,
+    ClockResynced,
 }
 
 /// <summary>

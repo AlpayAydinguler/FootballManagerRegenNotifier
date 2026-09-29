@@ -152,11 +152,15 @@ once, correctly, labelled with how late it is:
 > England: intake window opened 5 days ago on 14/03/2026 — you are now at
 > 19/03/2026. Still open until 31/03/2026.
 
-Three more things fall out of that design:
+Four more things fall out of that design:
 
 - **A single misread cannot poison the state.** A new date must be seen twice in
-  a row before it is committed, and a jump of more than 400 days is discarded as
-  a misread rather than believed.
+  a row before it is committed, and a jump of more than 400 days, forwards or
+  backwards, is held back as a misread rather than believed.
+- **Nor can a persistent one.** If the far-off date keeps reading the same way
+  for about twenty seconds without the old one showing up again, the app switches
+  to it: either the old date was the misread, or you loaded a save from another
+  season. Any intake it crossed while waiting is still reported.
 - **Reloading a save re-arms.** Save-scumming an intake is the main reason to
   want this tool, so a backwards jump un-fires the alerts it crossed. A real-time
   cooldown stops a tight reload loop from machine-gunning the same alert.
@@ -266,6 +270,18 @@ if yours sits far below that consistently, tune the image rather than the floor.
 
 If the date advances but no alerts fire, check that the countries you expect are
 ticked and that their windows are ahead of the current in-game date.
+
+### The log keeps saying "Ignored implausible jump"
+
+The app has read a date more than 400 days away from the one it is tracking, and
+is treating it as a misread. That is correct for a one-off, and it clears by
+itself as soon as the tracked date is read again.
+
+If the log counts up to a switch (`1/10`, `2/10`, …) and then says `Switched to
+…`, the date it was tracking was the wrong one — typically a year misread as
+something like 2013 — and it has corrected itself. Nothing needs doing. If it
+happens often, the region is catching something that is not the clock, or the
+year is being misread: check the preview and work through the 7-vs-1 steps above.
 
 ### "Football Manager is not running" while it is plainly running
 

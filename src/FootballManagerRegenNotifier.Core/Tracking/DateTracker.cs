@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Globalization;
 using FootballManagerRegenNotifier.Core.Model;
 using FootballManagerRegenNotifier.Core.Triggers;
@@ -70,10 +71,11 @@ public sealed class DateTracker(TriggerCalendar calendar, TrackerConfig? config 
         }
 
         // Already committed to this date; nothing to do. Clear any stale pending
-        // candidate so a flicker cannot accumulate confirmations over time.
+        // candidate so a flicker cannot accumulate confirmations over time, and
+        // any re-sync candidate: the committed date is evidently still on screen.
         if (state.LastSeen == date)
         {
-            return new StepResult(state with { Pending = null, PendingCount = 0 }, []);
+            return new StepResult(state with { Pending = null, PendingCount = 0, Candidate = null }, []);
         }
 
         // Commit-on-confirm.
@@ -106,16 +108,15 @@ public sealed class DateTracker(TriggerCalendar calendar, TrackerConfig? config 
     {
         int delta = current.DayNumber - previous.DayNumber;
 
-        if (delta < 0) return Regress(state, previous, current);
+        // Checked before the direction, and in both directions. A year misread as
+        // 2013 used to go through as a save reload, get committed, and then turn
+        // every correct reading afterwards into an implausible forward jump.
+        if (Math.Abs(delta) > _config.MaxJumpDays) return Quarantine(state, previous, current, isArmed);
 
-        if (delta > _config.MaxJumpDays)
-        {
-            // Do not commit. A year field misread as 2062 would otherwise poison
-            // LastSeen permanently and silently mark every trigger as crossed.
-            return new StepResult(state, [TrackerEvent.Info(
-                TrackerEventKind.JumpQuarantined,
-                $"Ignored implausible jump {Fmt(previous)} to {Fmt(current)} ({delta} days). Likely a misread.", current)]);
-        }
+        // A plausible reading means the committed timeline is alive.
+        state = state with { Candidate = null };
+
+        if (delta < 0) return Regress(state, previous, current);
 
         var events = new List<TrackerEvent>
         {
@@ -133,18 +134,72 @@ public sealed class DateTracker(TriggerCalendar calendar, TrackerConfig? config 
             if (fired.Contains(trigger.Key)) continue;
 
             fired = fired.Add(trigger.Key);
-            var timing = trigger.TimingAt(current);
-            events.Add(new TrackerEvent
-            {
-                Kind = TrackerEventKind.AlertRaised,
-                Trigger = trigger,
-                Timing = timing,
-                Date = current,
-                Message = Describe(trigger, timing, current),
-            });
+            events.Add(Alert(trigger, current));
         }
 
         return new StepResult(state with { LastSeen = current, Fired = fired }, events);
+    }
+
+    /// <summary>
+    /// A confirmed reading too far from the committed date to believe.
+    /// </summary>
+    /// <remarks>
+    /// Do not commit it: a year field misread as 2062 would otherwise poison
+    /// LastSeen and fire every trigger in between. But do not drop it either,
+    /// because the refusal is symmetric - if LastSeen is the misread, the truth
+    /// looks exactly this implausible. Readings that agree with each other build
+    /// up a <see cref="ResyncCandidate"/>, and a candidate that lasts wins.
+    /// </remarks>
+    private StepResult Quarantine(TrackerState state, DateOnly previous, DateOnly current, Func<CountryRule, bool> isArmed)
+    {
+        var candidate = state.Candidate is { } c && Math.Abs(current.DayNumber - c.Latest.DayNumber) <= _config.MaxJumpDays
+            ? new ResyncCandidate(current < c.Since ? current : c.Since, current, c.Confirmations + 1)
+            : new ResyncCandidate(DayBefore(current), current, 1);
+
+        if (candidate.Confirmations >= _config.ResyncConfirmations)
+        {
+            return Resync(state, previous, candidate, isArmed);
+        }
+
+        int delta = current.DayNumber - previous.DayNumber;
+        return new StepResult(state with { Candidate = candidate }, [TrackerEvent.Info(
+            TrackerEventKind.JumpQuarantined,
+            $"Ignored implausible jump {Fmt(previous)} to {Fmt(current)} ({delta} days). Likely a misread - "
+            + $"will switch to it if it keeps reading that way ({candidate.Confirmations}/{_config.ResyncConfirmations}).",
+            current)]);
+    }
+
+    /// <summary>
+    /// Abandons the committed date for a candidate that has outlasted it.
+    /// </summary>
+    /// <remarks>
+    /// The old <see cref="TrackerState.Fired"/> set belongs to the abandoned
+    /// timeline and is dropped: kept, a reload to an earlier season would leave
+    /// that season's intakes marked as already alerted. Its replacement is what
+    /// the candidate crossed while it was being confirmed, fired now, so that a
+    /// window which opened during the wait is reported late rather than lost.
+    /// </remarks>
+    private StepResult Resync(TrackerState state, DateOnly previous, ResyncCandidate candidate, Func<CountryRule, bool> isArmed)
+    {
+        var current = candidate.Latest;
+        var events = new List<TrackerEvent>
+        {
+            TrackerEvent.Info(TrackerEventKind.ClockResynced,
+                $"Switched to {Fmt(current)} from {Fmt(previous)} after {candidate.Confirmations} consistent readings. "
+                + $"{Fmt(previous)} was probably a misread, or a different save was loaded.",
+                current),
+        };
+
+        var fired = ImmutableHashSet<TriggerKey>.Empty;
+        foreach (var trigger in _calendar.Crossings(candidate.Since, current))
+        {
+            if (!isArmed(trigger.Rule)) continue;
+
+            fired = fired.Add(trigger.Key);
+            events.Add(Alert(trigger, current));
+        }
+
+        return new StepResult(state with { LastSeen = current, Fired = fired, Candidate = null }, events);
     }
 
     /// <summary>
@@ -183,6 +238,26 @@ public sealed class DateTracker(TriggerCalendar calendar, TrackerConfig? config 
 
         return new StepResult(state with { LastSeen = current, Fired = fired }, events);
     }
+
+    private static TrackerEvent Alert(MaterialisedTrigger trigger, DateOnly observed)
+    {
+        var timing = trigger.TimingAt(observed);
+        return new TrackerEvent
+        {
+            Kind = TrackerEventKind.AlertRaised,
+            Trigger = trigger,
+            Timing = timing,
+            Date = observed,
+            Message = Describe(trigger, timing, observed),
+        };
+    }
+
+    /// <summary>
+    /// The exclusive bound that makes a crossing test include <paramref name="date"/>
+    /// itself. Clamped rather than thrown: a garbage year 0001 is still a reading.
+    /// </summary>
+    private static DateOnly DayBefore(DateOnly date) =>
+        date == DateOnly.MinValue ? date : date.AddDays(-1);
 
     private static string Describe(MaterialisedTrigger t, TriggerTiming timing, DateOnly observed)
     {

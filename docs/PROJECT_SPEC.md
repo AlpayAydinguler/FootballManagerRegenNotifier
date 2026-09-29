@@ -216,15 +216,26 @@ and asks whether any armed trigger falls in the half-open interval between it an
 the current reading.
 
 ```
-delta == 0                → no-op
-0 < delta <= MAX_JUMP     → fire every trigger T where lastSeen < T <= current
-delta < 0                 → regression: fire nothing, re-arm triggers in (current, lastSeen]
-delta > MAX_JUMP (400d)   → quarantine; do not commit, do not fire
-lastSeen == null          → cold start: adopt, arm, fire nothing
+delta == 0                 → no-op
+0 < delta <= MAX_JUMP      → fire every trigger T where lastSeen < T <= current
+-MAX_JUMP <= delta < 0     → regression: fire nothing, re-arm triggers in (current, lastSeen]
+|delta| > MAX_JUMP (400d)  → quarantine; do not commit, do not fire, count towards a re-sync
+lastSeen == null           → cold start: adopt, arm, fire nothing
 ```
 
 Retroactive alerts are labelled with how late they are, so "the window opened
 five days ago" reads differently from "the window opens today".
+
+The ceiling applies in both directions, and a quarantined reading is not thrown
+away. An earlier version only bounded forward jumps: a year misread as 2013
+therefore went through as a save reload, was committed, and turned every correct
+reading afterwards into an implausible forward jump, permanently. The ceiling can
+tell that two dates are far apart but not which one is wrong, so quarantined
+readings that agree with each other (each within `MAX_JUMP` of the last) build a
+**re-sync candidate**. After 10 confirmations with no reading of `lastSeen` in
+between, the candidate wins: it is adopted, the old fired set is dropped (it
+belongs to the abandoned timeline), and whatever the candidate crossed while it
+was being confirmed is fired, so nothing is lost to the wait.
 
 ### 3. Anti-spam is two-layer
 
@@ -373,6 +384,8 @@ surfaced in the dashboard.
   start of the period, which is what the brief asked for.
 - **No save identity.** No `.fm` files exist under the user profile on the target
   machine, so distinguishing "reloaded this save" from "switched saves" is not
-  possible; both are treated as a regression and re-arm.
+  possible; both are treated as a regression and re-arm. A save more than 400
+  days away is indistinguishable from a misread, and takes about twenty seconds
+  of consistent readings to switch to.
 - **FM27 arrives November 2026** and will invalidate the default coordinates.
   Re-calibration and a spreadsheet edit are the intended response.

@@ -157,19 +157,218 @@ public class DateTrackerTests
     }
 
     [Fact]
-    public void SystematicMisread_RepeatedForever_StillNeverCommitsAnImplausibleJump()
+    public void SystematicMisread_InterleavedWithTheTrueDate_NeverCommits()
     {
         // Commit-on-confirm cannot catch a misread that repeats identically, which
-        // is exactly why the plausibility ceiling exists as a separate guard.
+        // is exactly why the plausibility ceiling exists as a separate guard. One
+        // read of the committed date in each run is enough to keep it out.
         var tracker = Tracker(TestData.England);
         var state = TestData.Commit(tracker, TrackerState.Initial, new DateOnly(2026, 3, 1));
 
         for (int i = 0; i < 50; i++)
         {
-            state = tracker.Step(state, TestData.Good(2062, 3, 1), _ => true).State;
+            for (int j = 0; j < 2 * (tracker.Config.ResyncConfirmations - 1); j++)
+            {
+                state = tracker.Step(state, TestData.Good(2062, 3, 1), _ => true).State;
+            }
+            state = tracker.Step(state, TestData.Good(2026, 3, 1), _ => true).State;
         }
 
         Assert.Equal(new DateOnly(2026, 3, 1), state.LastSeen);
+        Assert.Null(state.Candidate);
+    }
+
+    // ---------------------------------------------------------- misread recovery
+
+    [Fact]
+    public void BackwardMisread_IsQuarantinedRatherThanTreatedAsAReload()
+    {
+        // The reported failure: 2025 read as 2013 twice in a row went through as a
+        // save reload, was written to state.json, and re-armed every alert since.
+        var tracker = Tracker(TestData.England);
+        var state = TestData.Commit(tracker, TrackerState.Initial, new DateOnly(2025, 8, 13));
+
+        var events = new List<TrackerEvent>();
+        state = TestData.Commit(tracker, state, new DateOnly(2013, 8, 13), sink: events);
+
+        Assert.Equal(new DateOnly(2025, 8, 13), state.LastSeen);
+        Assert.Contains(events, e => e.Kind == TrackerEventKind.JumpQuarantined);
+        Assert.DoesNotContain(events, e => e.Kind == TrackerEventKind.ClockRegressed);
+    }
+
+    [Fact]
+    public void BackwardMisread_ThenTheTrueDate_CarriesOnAsIfNothingHappened()
+    {
+        var tracker = Tracker(TestData.England);
+        var state = TestData.Commit(tracker, TrackerState.Initial, new DateOnly(2026, 3, 10));
+        state = TestData.Commit(tracker, state, new DateOnly(2013, 3, 10));
+
+        // Reading correctly again: the committed date drops the candidate...
+        state = tracker.Step(state, TestData.Good(2026, 3, 10), _ => true).State;
+        Assert.Null(state.Candidate);
+
+        // ...and the next intake still fires on time.
+        var events = new List<TrackerEvent>();
+        TestData.Commit(tracker, state, new DateOnly(2026, 3, 14), sink: events);
+
+        var alert = Assert.Single(events.Alerts());
+        Assert.Equal(TriggerTiming.OnTime, alert.Timing);
+    }
+
+    [Fact]
+    public void StuckOnAMisreadDate_SwitchesToTheTrueDateOnceItPersists()
+    {
+        // A misread already in state.json from an earlier version, or one that
+        // persisted long enough to win. Every correct reading is now "too far",
+        // and before this fix the app refused them all, forever.
+        var tracker = Tracker(TestData.England);
+        var state = new TrackerState { LastSeen = new DateOnly(2013, 3, 10) };
+
+        var events = new List<TrackerEvent>();
+        for (int i = 1; i < tracker.Config.ResyncConfirmations; i++)
+        {
+            state = TestData.Commit(tracker, state, new DateOnly(2026, 3, 10), sink: events);
+            Assert.Equal(new DateOnly(2013, 3, 10), state.LastSeen);
+        }
+
+        state = TestData.Commit(tracker, state, new DateOnly(2026, 3, 10), sink: events);
+
+        Assert.Equal(new DateOnly(2026, 3, 10), state.LastSeen);
+        Assert.Null(state.Candidate);
+        Assert.Contains(events, e => e.Kind == TrackerEventKind.ClockResynced);
+        Assert.Empty(events.Alerts());
+
+        // And it works normally from there.
+        var after = new List<TrackerEvent>();
+        TestData.Commit(tracker, state, new DateOnly(2026, 3, 14), sink: after);
+        Assert.Equal("ENG", Assert.Single(after.Alerts()).Trigger!.Key.CountryCode);
+    }
+
+    [Fact]
+    public void Resync_ReportsIntakesCrossedWhileWaitingToSwitch()
+    {
+        // The user keeps pressing Continue while the true date is being confirmed.
+        // England opens on 14 March in the middle of that; it must not be lost.
+        var tracker = Tracker(TestData.England);
+        var state = new TrackerState { LastSeen = new DateOnly(2013, 3, 10) };
+
+        int needed = tracker.Config.ResyncConfirmations;
+        var events = new List<TrackerEvent>();
+        for (int i = 0; i < needed; i++)
+        {
+            var date = i < needed / 2 ? new DateOnly(2026, 3, 10) : new DateOnly(2026, 3, 16);
+            state = TestData.Commit(tracker, state, date, sink: events);
+        }
+
+        Assert.Equal(new DateOnly(2026, 3, 16), state.LastSeen);
+        var alert = Assert.Single(events.Alerts());
+        Assert.Equal(new TriggerKey("ENG", 2026, TriggerKind.WindowOpen), alert.Trigger!.Key);
+        Assert.Equal(TriggerTiming.Late, alert.Timing);
+        Assert.Contains(alert.Trigger.Key, state.Fired);
+    }
+
+    [Fact]
+    public void Resync_IncludesAnIntakeOpeningOnTheFirstDayItSaw()
+    {
+        var tracker = Tracker(TestData.England);
+        var state = new TrackerState { LastSeen = new DateOnly(2013, 8, 13) };
+
+        var events = new List<TrackerEvent>();
+        for (int i = 0; i < tracker.Config.ResyncConfirmations; i++)
+        {
+            state = TestData.Commit(tracker, state, new DateOnly(2026, 3, 14), sink: events);
+        }
+
+        var alert = Assert.Single(events.Alerts());
+        Assert.Equal(TriggerTiming.OnTime, alert.Timing);
+    }
+
+    [Fact]
+    public void Resync_ReloadInsideTheWait_OnlyReportsWhatIsStillCrossed()
+    {
+        // While the candidate is being confirmed the user goes past 14 March,
+        // reloads to the 12th, then advances to the 13th. Net: nothing crossed.
+        var tracker = Tracker(TestData.England);
+        var state = new TrackerState { LastSeen = new DateOnly(2013, 3, 1) };
+
+        var events = new List<TrackerEvent>();
+        state = TestData.Commit(tracker, state, new DateOnly(2026, 3, 13), sink: events);
+        state = TestData.Commit(tracker, state, new DateOnly(2026, 3, 20), sink: events);
+        state = TestData.Commit(tracker, state, new DateOnly(2026, 3, 12), sink: events);
+        for (int i = 3; i < tracker.Config.ResyncConfirmations; i++)
+        {
+            state = TestData.Commit(tracker, state, new DateOnly(2026, 3, 13), sink: events);
+        }
+
+        Assert.Equal(new DateOnly(2026, 3, 13), state.LastSeen);
+        Assert.Contains(events, e => e.Kind == TrackerEventKind.ClockResynced);
+        Assert.Empty(events.Alerts());
+        Assert.Empty(state.Fired);
+    }
+
+    [Fact]
+    public void LoadingASaveSeasonsEarlier_SwitchesAndReArmsThatSeason()
+    {
+        // A different career, or an old autosave. Alerts fired on the abandoned
+        // timeline must not stay marked as fired for the one being switched to.
+        var tracker = Tracker(TestData.England);
+        var state = TestData.Commit(tracker, TrackerState.Initial, new DateOnly(2025, 3, 13));
+        state = TestData.Commit(tracker, state, new DateOnly(2025, 3, 14));
+        state = TestData.Commit(tracker, state, new DateOnly(2026, 2, 1));
+        state = TestData.Commit(tracker, state, new DateOnly(2027, 1, 1));
+        Assert.Contains(state.Fired, k => k.OccurrenceYear == 2025);
+
+        for (int i = 0; i < tracker.Config.ResyncConfirmations; i++)
+        {
+            state = TestData.Commit(tracker, state, new DateOnly(2025, 3, 1));
+        }
+        Assert.Equal(new DateOnly(2025, 3, 1), state.LastSeen);
+
+        var events = new List<TrackerEvent>();
+        TestData.Commit(tracker, state, new DateOnly(2025, 3, 14), sink: events);
+        Assert.Equal(2025, Assert.Single(events.Alerts()).Trigger!.Key.OccurrenceYear);
+    }
+
+    [Fact]
+    public void FarReadingsThatDisagreeWithEachOther_NeverSwitch()
+    {
+        // Two different garbage years, each confirmed, alternating. Neither one
+        // is a consistent timeline, so neither may take over.
+        var tracker = Tracker(TestData.England);
+        var state = TestData.Commit(tracker, TrackerState.Initial, new DateOnly(2026, 3, 1));
+
+        for (int i = 0; i < 5 * tracker.Config.ResyncConfirmations; i++)
+        {
+            state = TestData.Commit(tracker, state, i % 2 == 0 ? new DateOnly(2062, 3, 1) : new DateOnly(1990, 3, 1));
+        }
+
+        Assert.Equal(new DateOnly(2026, 3, 1), state.LastSeen);
+        Assert.Equal(1, state.Candidate!.Confirmations);
+    }
+
+    [Fact]
+    public void ConfirmedPlausibleReading_DropsTheCandidate()
+    {
+        var tracker = Tracker(TestData.England);
+        var state = TestData.Commit(tracker, TrackerState.Initial, new DateOnly(2026, 3, 1));
+
+        state = TestData.Commit(tracker, state, new DateOnly(2062, 3, 1));
+        Assert.NotNull(state.Candidate);
+
+        state = TestData.Commit(tracker, state, new DateOnly(2026, 3, 2));
+        Assert.Null(state.Candidate);
+        Assert.Equal(new DateOnly(2026, 3, 2), state.LastSeen);
+    }
+
+    [Fact]
+    public void GarbageYearOne_DoesNotThrow()
+    {
+        var tracker = Tracker(new TrackerConfig { ResyncConfirmations = 1 }, TestData.England);
+        var state = TestData.Commit(tracker, TrackerState.Initial, new DateOnly(2026, 3, 1));
+
+        state = TestData.Commit(tracker, state, DateOnly.MinValue);
+
+        Assert.Equal(DateOnly.MinValue, state.LastSeen);
     }
 
     // ------------------------------------------------------------- commit-on-confirm
