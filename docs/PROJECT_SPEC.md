@@ -248,16 +248,19 @@ re-sync.
 replayed exactly as the rows above would have handled them: re-arm down to the
 lowest date it visited, then fire everything from there to where it is now. So an
 intake crossed during the wait is reported late rather than lost. A confirmed
-reading that carries on from the candidate rather than from `lastSeen` counts
-towards the candidate instead of being committed: a save loaded a year back walks
-out of the misread-year shape within a week of Continue clicks. The origin is the
-first of:
+reading that carries on from the candidate (closer to it than to `lastSeen`, and
+at most 60 days past it) counts towards the candidate instead of being committed:
+a save loaded a year back walks out of the misread-year shape within a week of
+Continue clicks. A reading in the misread-year shape against the candidate starts
+a new candidate rather than extending it. The origin is the first of:
 
 1. the timeline the last re-sync left, with its alerts, when the candidate comes
-   back to it: anywhere from `MAX_JUMP` before where it was left to 60 days after
-   (the whole ceiling if that date came from `state.json`). A misread that won,
-   or a save switched away from, is picked up where it was left; only the most
-   recent one is remembered;
+   back to it: anywhere from `MAX_JUMP` before where it was left to 60 days after,
+   or the whole ceiling after if that date came from `state.json` or the
+   candidate is the date being left in another year (the real date returning
+   after a misread year, possibly past a long holiday). A misread that won, or a
+   save switched away from, is picked up where it was left; only the most recent
+   one is remembered, in memory only;
 2. the committed timeline itself, when the candidate is inside the ceiling and
    was held only for its shape (a year-long holiday comes out as if accepted at
    once, only later);
@@ -434,6 +437,13 @@ surfaced in the dashboard.
   is switched to, because it is indistinguishable from loading another save. The
   switch back loses nothing, but while a misread year is the tracked date intakes
   fire on the right day under the wrong year, and are reported again, correctly,
-  once the real date is back.
+  once the real date is back. A misread by exactly one year that wins is
+  indistinguishable from a year-long holiday, and reports that year's intakes as
+  missed.
+- **A restored date is remembered all session.** After a restart, a save loaded
+  up to a year after the saved date is taken for that save played on while the
+  app was closed, even hours later, and the gap is reported as missed. Narrowing
+  this would lose the alerts in the case it exists for, which produces the same
+  readings; **Reset date** clears it.
 - **FM27 arrives November 2026** and will invalidate the default coordinates.
   Re-calibration and a spreadsheet edit are the intended response.

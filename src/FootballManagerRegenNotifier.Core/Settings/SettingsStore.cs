@@ -21,6 +21,9 @@ public sealed record RuntimeState
     /// <summary>Component order learned from an unambiguous on-screen date.</summary>
     public DateOrder? LearnedDateOrder { get; init; }
 
+    /// <summary>Reset date was pressed and no date has been adopted since.</summary>
+    public bool AnnounceOpenWindows { get; init; }
+
     public static readonly RuntimeState Empty = new();
 }
 
@@ -140,6 +143,7 @@ public sealed class SettingsStore
             // A saved date may belong to another save, or be a misread from an
             // earlier version; it has to be seen on screen before it is trusted.
             Unconfirmed = state.LastSeenInGameDate is not null,
+            AnnounceOpenWindows = state.LastSeenInGameDate is null && state.AnnounceOpenWindows,
             Fired = [.. fired],
         };
     }
@@ -153,6 +157,7 @@ public sealed class SettingsStore
             LastSeenInGameDate = tracker.LastSeen,
             FiredTriggerKeys = [.. tracker.Fired.Select(k => k.ToString())],
             LearnedDateOrder = learnedOrder,
+            AnnounceOpenWindows = tracker.AnnounceOpenWindows,
         };
     }
 

@@ -165,10 +165,12 @@ Four more things fall out of that design:
   old date was the misread, or you loaded a save from another season. If the new
   date was the misread instead, it switches back the same way once the real one
   is read again, and picks up where it left off. Either way, an intake crossed
-  meanwhile is reported, and one already alerted is not announced again. The one
-  exception: while a misread year is the tracked date, intakes still fire on the
+  meanwhile is reported, and one already alerted is not announced again, with two
+  exceptions. While a misread year is the tracked date, intakes still fire on the
   right day but under the wrong year, and are reported again, correctly, when the
-  real date comes back.
+  real date comes back. And a misread by one year that holds for those twenty
+  seconds cannot be told from a year-long holiday, so that year's intakes are
+  reported as missed, and announced again when the game really reaches them.
 - **Reloading a save re-arms.** Save-scumming an intake is the main reason to
   want this tool, so a backwards jump un-fires the alerts it crossed. A real-time
   cooldown stops a tight reload loop from machine-gunning the same alert.
@@ -185,9 +187,9 @@ switch looks like one of the moves above:
 |---|---|
 | Earlier, within about a year | A reload: its upcoming intakes are re-armed at once. One almost exactly a season earlier (the same date, give or take a week) looks like a misread year, so it waits about twenty seconds first; pressing Continue meanwhile loses nothing. |
 | More than about a year away, either way | About twenty seconds of "Ignored implausible jump", then it switches. Nothing is reported for the gap; windows open in that save right now are announced. |
-| The one you most recently switched away from | The same, and it picks up where that save was left, as long as it is no more than about two months (in game) past that point: nothing already alerted in it is repeated. Only the most recent one is remembered, and **Reset date** forgets it. |
+| The one you most recently switched away from | The same, and it picks up where that save was left, as long as it is no more than about two months (in game) past that point: nothing already alerted in it is repeated. Only the most recent one is remembered; **Reset date** and restarting the app forget it, and going back to it after a restart announces its open windows again. |
 | Later, within about a year | Indistinguishable from a holiday, so every intake in between is reported as missed. |
-| Any, after restarting the app | The date saved last time is only trusted once it is seen on screen. If the save on screen is more than a year away, it switches at once. |
+| Any, after restarting the app | The date saved last time is only trusted once it is seen on screen. If the save on screen is more than a year away, it switches at once. The saved date is then still remembered for the rest of the session: a save loaded later that lands up to about a year after it is taken for that save played on while the app was closed, and the intakes in between are reported as missed. |
 
 For the "later, within about a year" row, or whenever you want a clean start,
 press **Reset date** in the header after loading the save. The app forgets the

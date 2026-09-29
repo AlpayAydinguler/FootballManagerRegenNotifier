@@ -114,7 +114,11 @@ public sealed class DateTracker(TriggerCalendar calendar, TrackerConfig? config 
         var fired = state.Fired;
         if (state.AnnounceOpenWindows)
         {
-            foreach (var trigger in StillOpen(date, date))
+            // Exactly what a switch to a new timeline announces: anything due on
+            // the adopted day itself, including a lead heads-up, and any window
+            // that opened before it and is still open.
+            var before = DayBefore(date);
+            foreach (var trigger in _calendar.Crossings(before, date).Concat(StillOpen(date, before)))
             {
                 if (!isArmed(trigger.Rule)) continue;
                 if (fired.Contains(trigger.Key)) continue;
@@ -145,8 +149,12 @@ public sealed class DateTracker(TriggerCalendar calendar, TrackerConfig? config 
         // committed date belongs to the candidate. Loading a save a year back and
         // pressing Continue walks out of the misread-year shape within a week;
         // committing that reading against the old date would skip the days the
-        // candidate had already covered, and the intakes in them.
-        if (state.Candidate is { } held && Math.Abs(current.DayNumber - held.Latest.DayNumber) < Math.Abs(delta))
+        // candidate had already covered, and the intakes in them. "Carries on"
+        // means a short step: a reading months past the candidate is another
+        // save, and merged in it would replay every intake in between.
+        if (state.Candidate is { } held
+            && Math.Abs(current.DayNumber - held.Latest.DayNumber) < Math.Abs(delta)
+            && current.DayNumber - held.Latest.DayNumber <= _config.ReturnWindowDays)
         {
             return Quarantine(state, previous, current, isArmed);
         }
@@ -190,7 +198,12 @@ public sealed class DateTracker(TriggerCalendar calendar, TrackerConfig? config 
     /// </remarks>
     private StepResult Quarantine(TrackerState state, DateOnly previous, DateOnly current, Func<CountryRule, bool> isArmed)
     {
-        var existing = state.Candidate is { } c && Math.Abs(current.DayNumber - c.Latest.DayNumber) <= _config.MaxJumpDays
+        // A reading in the misread-year shape against the candidate starts a new
+        // one rather than extending it: extended, two samples of a misread digit
+        // would drag the floor back a year and replay that year on switching.
+        var existing = state.Candidate is { } c
+                       && Math.Abs(current.DayNumber - c.Latest.DayNumber) <= _config.MaxJumpDays
+                       && YearsShifted(c.Latest, current) is null
             ? c
             : null;
         var candidate = existing is { } e
@@ -247,8 +260,8 @@ public sealed class DateTracker(TriggerCalendar calendar, TrackerConfig? config 
     /// meanwhile are reported once and nothing is repeated. "Back" means from
     /// anywhere up to the jump ceiling before where it was left (an older
     /// autosave) to <see cref="TrackerConfig.ReturnWindowDays"/> after it (the
-    /// clock kept moving). A restored date gets the whole ceiling forwards,
-    /// since the game may have been played on while the app was closed.</item>
+    /// clock kept moving), or the whole ceiling after it (see
+    /// <see cref="ComesBackTo"/>).</item>
     /// <item>The committed timeline itself, when the candidate is within the jump
     /// ceiling of it and was held back only for its shape. That makes a holiday of
     /// about a year come out exactly as it would have if accepted at once, only
@@ -271,7 +284,8 @@ public sealed class DateTracker(TriggerCalendar calendar, TrackerConfig? config 
 
         Timeline origin;
         string how;
-        if (state.Abandoned is { } back && ComesBackTo(back, candidate.First))
+        if (state.Abandoned is { } back
+            && ComesBackTo(back, candidate.First, misreadYear: YearsShifted(previous, candidate.First) is not null))
         {
             origin = back;
             how = $"Picking up from {Fmt(back.LastSeen)}, where this timeline was left; {Fmt(previous)} was a misread or another save.";
@@ -320,10 +334,20 @@ public sealed class DateTracker(TriggerCalendar calendar, TrackerConfig? config 
         }, events);
     }
 
-    private bool ComesBackTo(Timeline left, DateOnly first)
+    /// <summary>
+    /// Whether a candidate starting at <paramref name="first"/> is a return to
+    /// <paramref name="left"/>, from an older autosave up to a little way past it.
+    /// </summary>
+    /// <remarks>
+    /// The whole ceiling counts forwards when the game may genuinely have moved on
+    /// that far: a restored date (played on while the app was closed), or a
+    /// candidate that is the date being left in another year (the real date coming
+    /// back after a misread year, which may have held through a long holiday).
+    /// </remarks>
+    private bool ComesBackTo(Timeline left, DateOnly first, bool misreadYear)
     {
         int gap = first.DayNumber - left.LastSeen.DayNumber;
-        int ahead = left.Restored ? _config.MaxJumpDays : _config.ReturnWindowDays;
+        int ahead = left.Restored || misreadYear ? _config.MaxJumpDays : _config.ReturnWindowDays;
         return gap >= -_config.MaxJumpDays && gap <= ahead;
     }
 

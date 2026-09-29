@@ -442,6 +442,91 @@ public class ResyncTests
         Assert.Empty(firstLaunch.Alerts());
     }
 
+    [Fact]
+    public void AWrongSaveForAFewSeconds_ThenTheRightOneMonthsAway_IsAPlainReload()
+    {
+        // Save B, one season back, is on screen for a few seconds; then save C,
+        // months after it. C is a reload of the tracked save, not B played on, and
+        // must not replay every intake between B and C.
+        var tracker = Tracker(TestData.England, TestData.Brazil, TestData.Mexico);
+        var state = TestData.Commit(tracker, TrackerState.Initial, D(2025, 2, 20));
+        state = TestData.Commit(tracker, state, D(2025, 3, 1));
+
+        var events = new List<TrackerEvent>();
+        for (int i = 0; i < 3; i++) state = TestData.Commit(tracker, state, D(2024, 3, 5), sink: events);
+        state = TestData.Commit(tracker, state, D(2024, 8, 20), sink: events);
+
+        Assert.Equal(D(2024, 8, 20), state.LastSeen);
+        Assert.Empty(events.Alerts());
+        Assert.Contains(events, e => e.Kind == TrackerEventKind.ClockRegressed);
+    }
+
+    [Fact]
+    public void AMisreadYearDuringTheWaitToSwitch_DoesNotDragInAYearOfAlerts()
+    {
+        // Switching to a save in 2028; two samples of its year misread as 2027
+        // arrive while the switch is being confirmed.
+        var rules = new[] { TestData.England, TestData.Brazil, TestData.Mexico, TestData.SwedenLowerLeagues };
+
+        List<string> Run(bool misread)
+        {
+            var tracker = Tracker(rules);
+            var events = new List<TrackerEvent>();
+            var state = TestData.Commit(tracker, TrackerState.Initial, D(2025, 10, 1));
+            for (int i = 0; i < 3; i++) state = TestData.Commit(tracker, state, D(2028, 3, 20), sink: events);
+            if (misread) state = TestData.Commit(tracker, state, D(2027, 3, 20), sink: events);
+            state = SwitchTo(tracker, state, D(2028, 3, 20), events);
+            Assert.Equal(D(2028, 3, 20), state.LastSeen);
+            return [.. events.Alerts().Select(a => a.Trigger!.Key.ToString()).Order(StringComparer.Ordinal)];
+        }
+
+        Assert.Equal(Run(misread: false), Run(misread: true));
+    }
+
+    [Fact]
+    public void MisreadYearAfterALongHoliday_TheRealDateComingBackStillReportsTheHoliday()
+    {
+        // A holiday lands 70 days on, but the year reads as 2013 long enough to
+        // win. When the real date comes back it is the same date in another year
+        // as the misread, and is picked up from before the holiday.
+        var tracker = Tracker(TestData.England, TestData.Mexico);
+        var state = TestData.Commit(tracker, TrackerState.Initial, D(2025, 2, 20));
+        state = TestData.Commit(tracker, state, D(2025, 3, 1));
+        state = SwitchTo(tracker, state, D(2013, 5, 10));
+
+        var events = new List<TrackerEvent>();
+        state = SwitchTo(tracker, state, D(2025, 5, 10), events);
+
+        Assert.Equal(D(2025, 5, 10), state.LastSeen);
+        Assert.Contains(events.Alerts(), a => a.Trigger!.Key == new TriggerKey("ENG", 2025, TriggerKind.WindowOpen));
+    }
+
+    [Fact]
+    public void ResetDate_ALeadHeadsUpDueOnTheAdoptedDay_IsGiven()
+    {
+        var tracker = new DateTracker(new TriggerCalendar([TestData.England], leadDays: 7));
+
+        var events = new List<TrackerEvent>();
+        var state = TestData.Commit(tracker, TrackerState.AfterReset, D(2026, 3, 7), sink: events);
+        TestData.Commit(tracker, state, D(2026, 3, 14), sink: events);
+
+        Assert.Equal(["ENG:2026:Lead", "ENG:2026:WindowOpen"], events.Alerts().Select(a => a.Trigger!.Key.ToString()));
+    }
+
+    [Fact]
+    public void ResetDate_SurvivesARestartBeforeAnyDateIsRead()
+    {
+        var saved = SettingsStore.FromTrackerState(TrackerState.AfterReset, learnedOrder: null);
+        var restored = SettingsStore.ToTrackerState(saved);
+        Assert.True(restored.AnnounceOpenWindows);
+
+        var events = new List<TrackerEvent>();
+        var state = TestData.Commit(Tracker(TestData.England), restored, D(2026, 3, 20), sink: events);
+
+        Assert.Single(events.Alerts());
+        Assert.False(SettingsStore.ToTrackerState(SettingsStore.FromTrackerState(state, null)).AnnounceOpenWindows);
+    }
+
     // ------------------------------------------------------------ garbage years
 
     [Fact]
@@ -617,8 +702,12 @@ public class ResyncTests
                     }
                     else
                     {
+                        // Past the return window, and not the same time of year as
+                        // the save being left: that shape is the real date coming
+                        // back after a misread year, and is picked up on purpose.
                         do first = home.AddDays(rng.Next(tracker.Config.ReturnWindowDays + 1, tracker.Config.MaxJumpDays));
-                        while (Math.Abs(first.DayNumber - state.LastSeen!.Value.DayNumber) <= tracker.Config.MaxJumpDays);
+                        while (Math.Abs(first.DayNumber - state.LastSeen!.Value.DayNumber) <= tracker.Config.MaxJumpDays
+                               || NearSameDateInAnotherYear(first, state.LastSeen!.Value));
                         origin = new TrackerState { LastSeen = first.AddDays(-1) };
                     }
                     break;
