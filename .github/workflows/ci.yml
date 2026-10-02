@@ -6,6 +6,15 @@ on:
     tags: ['v*']
   pull_request:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: >-
+          To publish a release from this run, the tag to create, such as v0.2.0.
+          It must match <Version> in Directory.Build.props. Leave empty for a
+          plain build.
+        required: false
+        default: ''
+        type: string
 
 jobs:
   build:
@@ -69,7 +78,9 @@ jobs:
 
   release:
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    # A pushed v* tag, or a manual run given the tag to create. The second is
+    # for cutting a release from somewhere that may not push tags.
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && startsWith(inputs.release_tag, 'v'))
     runs-on: windows-latest
     permissions:
       contents: write
@@ -88,7 +99,20 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
+          # A pushed tag names itself. A manual run names the tag to create, and
+          # gh creates it on the commit this run built and tested.
+          $tag = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME } else { "$env:RELEASE_TAG".Trim() }
+
+          # The tag has to say what the binaries say they are.
+          [xml]$props = Get-Content Directory.Build.props
+          $version = 'v' + ($props.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1)
+          if ($tag -ne $version) {
+            Write-Error "Tag '$tag' does not match <Version> in Directory.Build.props ('$version')."
+            exit 1
+          }
+
           # PowerShell does not glob for native executables, so expand the paths
           # before handing them to gh.
           $files = (Get-ChildItem artifacts -File).FullName
@@ -97,7 +121,8 @@ jobs:
           # someone upgrading. When docs/releases/<tag>.md exists, gh puts it
           # above the generated list.
           $notes = @()
-          $notesFile = "docs/releases/$env:GITHUB_REF_NAME.md"
+          $notesFile = "docs/releases/$tag.md"
           if (Test-Path $notesFile) { $notes = @('--notes-file', $notesFile) }
 
-          gh release create $env:GITHUB_REF_NAME @files @notes --generate-notes --repo $env:GITHUB_REPOSITORY
+          # --target only matters when the tag does not exist yet.
+          gh release create $tag @files @notes --target $env:GITHUB_SHA --generate-notes --repo $env:GITHUB_REPOSITORY
