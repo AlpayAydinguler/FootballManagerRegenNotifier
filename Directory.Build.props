@@ -14,7 +14,7 @@
     <Company>AlpayAydinguler</Company>
     <Authors>Alpay Aydinguler</Authors>
     <Copyright>Copyright (c) 2026 Alpay Aydinguler</Copyright>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <RepositoryUrl>https://github.com/AlpayAydinguler/FootballManagerRegenNotifier</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
   </PropertyGroup>

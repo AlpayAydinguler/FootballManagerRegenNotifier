@@ -59,6 +59,10 @@ public sealed class DateReader(IScreenCapture capture, IOcrEngine engine, GameGa
 
         if (respectGate)
         {
+            // The gate was built from the settings at startup. Hand it the current
+            // ones on every read, or an edited process name or gate checkbox does
+            // nothing until the app is restarted.
+            _gate.Update(settings);
             var verdict = _gate.Check();
             if (!verdict.Allowed)
             {

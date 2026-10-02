@@ -75,6 +75,10 @@ jobs:
       contents: write
 
     steps:
+      # Only for the hand-written notes in docs/releases/; the binaries come from
+      # the build job, so what ships is exactly what was tested.
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           name: FMRegenNotifier-win-x64
@@ -88,4 +92,12 @@ jobs:
           # PowerShell does not glob for native executables, so expand the paths
           # before handing them to gh.
           $files = (Get-ChildItem artifacts -File).FullName
-          gh release create $env:GITHUB_REF_NAME @files --generate-notes --repo $env:GITHUB_REPOSITORY
+
+          # A generated list of commits says what changed, not what it means for
+          # someone upgrading. When docs/releases/<tag>.md exists, gh puts it
+          # above the generated list.
+          $notes = @()
+          $notesFile = "docs/releases/$env:GITHUB_REF_NAME.md"
+          if (Test-Path $notesFile) { $notes = @('--notes-file', $notesFile) }
+
+          gh release create $env:GITHUB_REF_NAME @files @notes --generate-notes --repo $env:GITHUB_REPOSITORY
