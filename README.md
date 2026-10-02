@@ -48,6 +48,10 @@ touches the save, and never injects anything into the process.
   only approach that survives that. See [below](#how-the-alerting-actually-works).
 - **Survives save-scumming.** Reloading to reroll an intake re-arms the alert
   instead of silently swallowing it.
+- **Copes with misreads and switching saves.** A date that looks like a misread
+  is held back rather than believed, a wrong one that persists corrects itself,
+  and **Reset date** in the header gives a clean start when you switch to a
+  different save. See [Switching between saves](#switching-between-saves).
 - **Only watches while the game is running**, so it is not quietly OCR-ing your
   inbox.
 
@@ -84,6 +88,17 @@ On first run the app creates:
 | `%APPDATA%\FMRegenNotifier\state.json` | Last seen date and fired alerts |
 | `%APPDATA%\FMRegenNotifier\logs\` | Rolling diagnostic log, 7 days |
 
+### Upgrading
+
+Close the app, then extract the new zip over the old folder. Your settings and
+the tracked date live in `%APPDATA%\FMRegenNotifier`, so they carry over
+wherever you extract it.
+
+`data/countries.xlsx` is the exception: it lives beside the exe and is only
+written when it is missing. If you edited it and extract to a new folder, copy
+it across, or the built-in table is used instead. Your ticked countries are
+saved in `settings.json` and are kept either way.
+
 ---
 
 ## Using it
@@ -117,17 +132,35 @@ screen immediately, so you can watch the effect of each change.
 Countries are grouped by continent with collapsible headers, sortable by name,
 youth rating or intake date. **Select top tier** ticks everything at or above a
 youth rating you choose (130 by default, which selects the nine elite newgen
-nations).
+nations). Lower-league rows are left out unless you tick **Include lower-league
+rows in 'Select top tier'** on the Alerts & Options tab.
 
 The **Confidence** column is worth reading. The shipped dataset is FM24-era: rows
 marked `Medium` are uncorroborated or carry a shared inactive-nation default
 date, and `Low` rows are known to be stale or ambiguous. Correct them against
 your own save — the table is a starting point, not gospel.
 
+To get an early warning as well, set **Warn this many days before the window
+opens** on the Alerts & Options tab. You then get a "youth intake window opens
+soon" alert that many in-game days ahead, on top of the usual alert when the
+window opens. It is 0 by default, which turns the early warning off.
+
 ### 4. Start monitoring
 
-Press **Start monitoring**. Coordinates, tuning and country selection lock while
-it runs; press **Stop** to change them.
+Press **Start monitoring**, then switch back to the game. Coordinates, tuning,
+country selection and most of Alerts & Options lock while it runs; press **Stop**
+to change them. The alert choices, **Test alert**, **Minimise to the
+notification area** and **Reset date** stay available.
+
+With the privacy options on (the default), reading pauses whenever Football
+Manager is not the active window, including while you are looking at this app,
+and whenever it is not running. The header and the log say why (`Paused: …`),
+and the preview keeps showing the last reading with a note that it is paused.
+Reading starts again when you switch back to the game.
+
+**Switching to a different save?** Press **Stop**, load the other save, press
+**Reset date** in the header, then start again. See
+[Switching between saves](#switching-between-saves).
 
 Minimise to the tray and the tooltip keeps showing the next intake and how many
 in-game days away it is, so you can check without waiting for an alert.
@@ -149,7 +182,7 @@ question: *did any armed trigger fall between where the clock was and where it i
 now?* Holiday from January to June and every window you flew past is reported at
 once, correctly, labelled with how late it is:
 
-> England: intake window opened 5 days ago on 14/03/2026 — you are now at
+> England: intake window opened 5 day(s) ago on 14/03/2026 - you are now at
 > 19/03/2026. Still open until 31/03/2026.
 
 Four more things fall out of that design:
@@ -157,8 +190,8 @@ Four more things fall out of that design:
 - **A single misread cannot poison the state.** A new date must be seen twice in
   a row before it is committed. A jump of more than 400 days, forwards or
   backwards, is held back as a misread rather than believed, and so is a jump to
-  the same date in another year, however short: 2025 read as 2026 is only 365
-  days.
+  the same date in another year, give or take a week, however short: 2025 read
+  as 2026 is only 365 days.
 - **A persistent one corrects itself.** The app cannot tell which of two dates
   is the wrong one. If the far-off date keeps reading the same way for about
   twenty seconds without the old one showing up again, it switches: either the
@@ -176,7 +209,12 @@ Four more things fall out of that design:
   cooldown stops a tight reload loop from machine-gunning the same alert.
 - **Only a clean read changes anything.** A failed capture, a menu covering the
   clock, or the game being closed are each distinct states, and none of them is
-  treated as "the date did not change".
+  treated as "the date did not change". Each is written to the Activity Log once,
+  when it starts: a blank capture, no date in the region or an unreadable region
+  as a warning, and the game being closed or not the active window as
+  `Paused: …`. When reading resumes the log says `Reading the date again.` or
+  `Football Manager detected — reading the screen.`, so a date that has stopped
+  moving always has a reason next to it.
 
 ### Switching between saves
 
@@ -188,13 +226,19 @@ switch looks like one of the moves above:
 | Earlier, within about a year | A reload: its upcoming intakes are re-armed at once. One almost exactly a season earlier (the same date, give or take a week) looks like a misread year, so it waits about twenty seconds first; pressing Continue meanwhile loses nothing. |
 | More than about a year away, either way | About twenty seconds of "Ignored implausible jump", then it switches. Nothing is reported for the gap; windows open in that save right now are announced. |
 | The one you most recently switched away from | The same, and it picks up where that save was left, as long as it is no more than about two months (in game) past that point: nothing already alerted in it is repeated. Only the most recent one is remembered; **Reset date** and restarting the app forget it, and going back to it after a restart announces its open windows again. |
-| Later, within about a year | Indistinguishable from a holiday, so every intake in between is reported as missed. |
-| Any, after restarting the app | The date saved last time is only trusted once it is seen on screen. If the save on screen is more than a year away, it switches at once. The saved date is then still remembered for the rest of the session: a save loaded later that lands up to about a year after it is taken for that save played on while the app was closed, and the intakes in between are reported as missed. |
+| Later, within about a year | Indistinguishable from a holiday, so every intake in between is reported as missed. One almost exactly a season later (the same date, give or take a week) looks like a misread year, so it waits about twenty seconds first, then does the same. |
+| Any, after restarting the app | The date saved last time is a starting point, not a fact. A save on screen within about a year of it is handled by the rows above, so if it is later, the intakes passed while the app was closed are reported as missed. One more than a year away is switched to at once, without the twenty-second wait. The saved date is then still remembered for the rest of the session: a save loaded later that lands up to about a year after it is taken for that save played on while the app was closed, and the intakes in between are reported as missed. |
 
 For the "later, within about a year" row, or whenever you want a clean start,
-press **Reset date** in the header after loading the save. The app forgets the
-tracked date and adopts the next one it reads without reporting the gap, and
-announces any intake window open at that date.
+use **Reset date** in the header: press **Stop**, load the other save, press
+**Reset date**, then start again. The app forgets the tracked date and the alerts
+already given, adopts the next date it reads without reporting the gap, and
+announces any intake window open at that date. If you close the app before a
+date is read, the next run still starts fresh.
+
+Press it *before* the other save is read, not after. While monitoring, a save up
+to a year later is taken as a holiday within a couple of seconds of appearing,
+and its gap has already been reported by the time you could switch windows.
 
 ---
 
@@ -204,6 +248,11 @@ A screen scraper that runs unattended is a liability if it is not careful, so:
 
 - Capture is **gated on Football Manager running and being the active window**,
   both on by default. Leave the app running overnight and it reads nothing.
+- **A pause holds the last reading.** While the gate is closed the preview keeps
+  the last date it read and says it is paused, so a date on screen does not mean
+  the app is still capturing. The Activity Log notes the pause once, for example
+  `Paused: No 'fm.exe' process is running.`, and logs
+  `Football Manager detected — reading the screen.` when capture resumes.
 - The rolling log records events and diagnostics, not the contents of your
   screen.
 - Nothing is sent anywhere. There is no network code in this application.
@@ -271,13 +320,24 @@ The single most common OCR failure, and usually not an engine problem.
   exclusive fullscreen cannot be captured this way.
 - The coordinates are off-screen. Press **Reset** and re-snip.
 
+The preview then says `Captured region is a single flat colour. The game may be
+in exclusive fullscreen.`, and while monitoring the log says `Capture is coming
+back blank`. If it says `Reading the date again.` shortly after, nothing needs
+doing: a grab can come back blank for a moment, for example after a display
+change, and the app then picks the screen up again on its own. If the warning
+stays and the date stops moving, it is one of the two causes above.
+
 ### Nothing happens when I press Start
 
 Check the Activity Log. Common causes:
 
 - **No countries ticked** — the log says so explicitly.
-- **"Football Manager is not running"** — the privacy gate is doing its job. The
-  process name defaults to `fm`; change it under Alerts & Options if your
+- **`Paused: Football Manager is running but is not the active window.`** —
+  expected while you are looking at this app. Switch back to the game and the
+  log says `Football Manager detected — reading the screen.`
+- **`Paused: No 'fm.exe' process is running.`** — the privacy gate is doing its
+  job, and the header shows "Football Manager is not running". The process name
+  defaults to `fm`; press **Stop** and change it under Alerts & Options if your
   installation differs.
 - **The OCR engine is unavailable** — `tessdata/eng.traineddata` is missing,
   which usually means only the `.exe` was copied rather than the whole folder.
@@ -286,15 +346,17 @@ Check the Activity Log. Common causes:
 
 Tick **Verbose** in the Activity Log to see every sample.
 
-If you see `Rejected … confidence` on readings whose text looks **wrong**, the
-image is too marginal — work through the 7-vs-1 steps above.
+If you see `Rejected "…" - mean confidence … below …` or `Rejected "…" - weakest
+character … below …` on readings whose text looks **wrong**, the image is too
+marginal — work through the 7-vs-1 steps above.
 
 If you see it on readings whose text looks **correct**, that is a different
 problem: Tesseract does not always report a useful confidence, and a perfectly
-good reading can come back at zero. Lower **Minimum mean confidence** and
-**Minimum per-character confidence** on the Alerts & Options tab, or set both to
-0 to accept whatever the engine returns. A healthy setup reads around 85–99%, so
-if yours sits far below that consistently, tune the image rather than the floor.
+good reading can come back at zero. Press **Stop**, then lower **Minimum mean
+confidence** (55% by default) and **Minimum per-character confidence** (70% by
+default) on the Alerts & Options tab, or set both to 0 to accept whatever the
+engine returns. A healthy setup reads around 85–99%, so if yours sits far below
+that consistently, tune the image rather than the floor.
 
 If the date advances but no alerts fire, check that the countries you expect are
 ticked and that their windows are ahead of the current in-game date.
@@ -302,8 +364,9 @@ ticked and that their windows are ahead of the current in-game date.
 ### The log keeps saying "Ignored implausible jump"
 
 The app has read a date more than 400 days away from the one it is tracking, or
-the same date in another year, and is treating it as a misread. That is correct
-for a one-off, and it clears by itself as soon as the tracked date is read again.
+within a week of the same date in another year, and is treating it as a misread.
+That is correct for a one-off, and it clears by itself as soon as the tracked
+date is read again.
 
 If the log counts up to a switch (`1/10`, `2/10`, …) and then says `Switched to
 …`, one of the two dates was wrong and the app has gone with the one that kept
@@ -317,17 +380,18 @@ the clock, or the year is being misread: check the preview and work through the
 ### I loaded another save and got a burst of "missed" alerts
 
 A save up to about a year later than the one being tracked looks exactly like a
-holiday, and a holiday is supposed to report every window it skipped. Press
-**Reset date** after loading a different save to start fresh instead: the gap is
-not reported, and windows open in that save are. See
+holiday, and a holiday is supposed to report every window it skipped. Next
+time, press **Stop**, load the other save, press **Reset date**, then start
+again: the gap is not reported, and windows open in that save are. Pressing it
+after the save has been read is too late for that switch. See
 [Switching between saves](#switching-between-saves).
 
 ### "Football Manager is not running" while it is plainly running
 
 The Activity Log names the process it searched for. The field accepts `fm`,
 `fm.exe` or a full path — all are normalised — so if it still cannot find the
-game, check the name against Task Manager's Details tab and update **Game
-process name**.
+game, check the name against Task Manager's Details tab, press **Stop**, and
+update **Game process name** on the Alerts & Options tab.
 
 ### Alerts fire but I never notice them
 
@@ -359,7 +423,7 @@ Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
 | `Core` | `net10.0` | Date state machine, trigger calendar, parser, catalog, settings. No UI, no Win32. |
 | `Capture` | `net10.0-windows` | Screen capture, preprocessing, OCR, process gate. |
 | `App` | `net10.0-windows` | WPF control centre. |
-| `*.Tests` | matching | 126 tests, xUnit. |
+| `*.Tests` | matching | xUnit. `Core.Tests` runs anywhere; `Capture.Tests` needs Windows. |
 
 `Core` targets plain `net10.0` deliberately: the correctness logic is where the
 bugs would be expensive and invisible, so the compiler is used to keep screen and

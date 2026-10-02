@@ -70,7 +70,7 @@
                     <TextBlock Text="{Binding GameStatus}" Foreground="{StaticResource Text2}"
                                VerticalAlignment="Center" Margin="0,0,14,0" FontSize="11" />
                     <Button Content="Reset date" Command="{Binding ResetTrackingCommand}" Margin="0,0,8,0"
-                            ToolTip="Switched to a different save? Forget the tracked date so the next one read is adopted as a fresh start: the gap is not reported as missed intakes, and windows open at that date are announced." />
+                            ToolTip="Switching to a different save? Press Stop, load it, press this, then start again. The next date read is adopted as a fresh start: the gap is not reported as missed intakes, and windows open at that date are announced." />
                     <Button Content="Start monitoring" Command="{Binding StartCommand}"
                             Style="{StaticResource PrimaryButton}" Margin="0,0,8,0" MinWidth="130" />
                     <Button Content="Stop" Command="{Binding StopCommand}" MinWidth="80" />
